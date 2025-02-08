@@ -17,7 +17,6 @@ import ChapterReader from "../Pages/ChapterReader/ChapterReader";
 // Import screens
 import HomeScreen from "./index";
 import SecondHomePage from "../Pages/SecondPage/SecondHomePage";
-import AuthModal from "../Pages/LoginPage/login";
 import ChapterScreen from "../Pages/ChapterScreen/ChapterScreen";
 import ActorPage from "../Pages/ActorPage/ActorPage";
 import GalleryPage from "../Pages/Gallery/GalleryPage";
