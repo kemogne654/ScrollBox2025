@@ -1,0 +1,10 @@
+node_modules
+.git
+android
+ios
+assets/videos
+*.mp4
+*.mov
+*.zip
+*.rar
+*.psd
