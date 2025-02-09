@@ -1,6 +1,7 @@
 import "react-native-gesture-handler";
 import "react-native-reanimated";
 import React, { useEffect, useState, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   StyleSheet,
   Platform,
@@ -117,16 +118,37 @@ function RootLayout() {
   const [appState, setAppState] = useState(AppState.currentState);
 
   // Handle app state changes
+  // Inside RootLayout.js, update the app state handler:
+
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (appState.match(/inactive|background/) && nextAppState === "active") {
-        navigationRef.current?.reset({
-          index: 0,
-          routes: [{ name: "Home" }],
-        });
+    const subscription = AppState.addEventListener(
+      "change",
+      async (nextAppState) => {
+        if (
+          appState.match(/inactive|background/) &&
+          nextAppState === "active"
+        ) {
+          // Check if we were in OTP verification
+          const savedState = await AsyncStorage.getItem(NAVIGATION_STATE_KEY);
+          if (savedState) {
+            const state = JSON.parse(savedState);
+            if (
+              state.currentRoute === "OTPVerificationPage" ||
+              state.currentRoute === "ChapterReader"
+            ) {
+              // ✅ If user was reading a chapter, DO NOT reset navigation
+              return;
+            }
+          }
+
+          navigationRef.current?.reset({
+            index: 0,
+            routes: [{ name: "Home" }],
+          });
+        }
+        setAppState(nextAppState);
       }
-      setAppState(nextAppState);
-    });
+    );
 
     return () => {
       subscription.remove();

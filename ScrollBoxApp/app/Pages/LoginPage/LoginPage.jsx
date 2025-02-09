@@ -138,7 +138,11 @@ export default function LoginPage() {
   }, [email, password, navigation, t]);
 
   const handleCloseModal = () => {
-    navigation.navigate("Home");
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("Home");
+    }
   };
 
   const navigateToSignUp = () => {
@@ -146,7 +150,7 @@ export default function LoginPage() {
   };
 
   const navigateToForgotPassword = () => {
-    navigation.navigate("ForgotPasswordEmail");
+    navigation.replace("ForgotPasswordEmail");
   };
 
   const handleGoogleSignIn = () => {

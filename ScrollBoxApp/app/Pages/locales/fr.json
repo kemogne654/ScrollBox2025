@@ -102,7 +102,7 @@
     "password_required": "Veuillez saisir votre mot de passe.",
     "login_error": "Échec de la connexion. Veuillez réessayer.",
     "credentials_error": "E-mail ou mot de passe invalide.",
-    "logging_in": "Connexion en cours...",
+    "logging_in": "Connexion...",
     "password_show": "Afficher",
     "password_hide": "Masquer",
     "google_signin": "Connectez-vous avec Google",

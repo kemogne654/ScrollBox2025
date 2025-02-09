@@ -214,8 +214,34 @@ const ChapterScreen = () => {
           selectedLanguage
         );
 
-        // Save to state
         setChapters(fetchedChapters);
+
+        // ✅ Restore the currently selected chapter in the new language
+        const storedChapterData = await AsyncStorage.getItem(
+          "selectedChapterForReading"
+        );
+        if (storedChapterData) {
+          const parsedData = JSON.parse(storedChapterData);
+
+          // If language changed, fetch the same chapter in the new language
+          if (parsedData.language !== selectedLanguage) {
+            const newChapter = fetchedChapters.find(
+              (ch) => ch.id === parsedData.id
+            );
+            if (newChapter) {
+              setSelectedChapterForReading(newChapter.id);
+
+              // ✅ Update stored chapter with the new language
+              await AsyncStorage.setItem(
+                "selectedChapterForReading",
+                JSON.stringify({
+                  id: newChapter.id,
+                  language: selectedLanguage,
+                })
+              );
+            }
+          }
+        }
       } catch (error) {
         console.error("Error updating chapters for language:", error);
       }
@@ -993,7 +1019,6 @@ const ChapterScreen = () => {
     setExpandedIndex(expandedIndex === index ? null : index);
   };
 
-  
   const toggleTextExpansion = (chapterId) => {
     const chapter = chapters.find((ch) => ch.id === chapterId);
     if (chapter && chapter.description.length > 100) {
@@ -1096,22 +1121,33 @@ const ChapterScreen = () => {
       await handleViewChapter(chapter.id); // Mark chapter as viewed
     };
 
-   const handleReadOrBuyClick = async () => {
-     if (isPurchased || isFirstChapter) {
-       // Check for token before allowing read
-       const token = await AsyncStorage.getItem("userToken");
-       if (!token) {
-         navigation.navigate("UserProfile", { screen: "LoginPage" });
-         return;
-       }
-       setSelectedChapterForReading(chapter.id);
-     } else {
-       const addedToCart = await handleAddToCart(chapter.id);
-       if (addedToCart) {
-         setIsPurchaseModalVisible(true);
-       }
-     }
-   };
+    const handleReadOrBuyClick = async () => {
+      if (isPurchased || isFirstChapter) {
+        const token = await AsyncStorage.getItem("userToken");
+        if (!token) {
+          navigation.navigate("UserProfile", { screen: "LoginPage" });
+          return;
+        }
+
+        // ✅ Store chapter along with language in AsyncStorage
+        const selectedChapterData = {
+          id: chapter.id,
+          language: selectedLanguage,
+        };
+
+        await AsyncStorage.setItem(
+          "selectedChapterForReading",
+          JSON.stringify(selectedChapterData)
+        );
+
+        setSelectedChapterForReading(chapter.id);
+      } else {
+        const addedToCart = await handleAddToCart(chapter.id);
+        if (addedToCart) {
+          setIsPurchaseModalVisible(true);
+        }
+      }
+    };
 
     const handleAddToBasket = async () => {
       if (!isPurchased && !isFirstChapter) {

@@ -3,6 +3,7 @@ import { BackHandler, Alert, Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import NetInfo from "@react-native-community/netinfo";
 import { useFocusEffect } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Import screens
 import LoginPage from "../Pages/LoginPage/LoginPage";
@@ -17,179 +18,87 @@ import OTPVerificationPage from "../Pages/LoginPage/OTPVerificationPage";
 
 const UserProfileStack = createNativeStackNavigator();
 
-// Enhanced back button prevention with memory cleanup
-const usePreventGoingBack = (navigation) => {
-  useFocusEffect(
-    useCallback(() => {
-      let backHandler;
+// Navigation state persistence
+const NAVIGATION_STATE_KEY = "@navigation_state";
 
-      const onBackPress = () => {
-        if (navigation.canGoBack()) {
-          Alert.alert(
-            "Go Back",
-            "Are you sure you want to go back?",
-            [
-              { text: "Cancel", style: "cancel", onPress: () => {} },
-              {
-                text: "Go Back",
-                style: "destructive",
-                onPress: () => {
-                  try {
-                    navigation.goBack();
-                  } catch (error) {
-                    // Fallback if navigation fails
-                    navigation.reset({
-                      index: 0,
-                      routes: [{ name: "LoginPage" }],
-                    });
-                  }
-                },
-              },
-            ],
-            { cancelable: false }
-          );
-        } else {
-          // At root screen
-          Alert.alert(
-            "Exit",
-            "Are you sure you want to exit?",
-            [
-              { text: "Cancel", style: "cancel" },
-              { text: "Exit", onPress: () => BackHandler.exitApp() },
-            ],
-            { cancelable: false }
-          );
-        }
-        return true;
-      };
-
-      if (Platform.OS === "android") {
-        backHandler = BackHandler.addEventListener(
-          "hardwareBackPress",
-          onBackPress
-        );
-      }
-
-      return () => {
-        if (backHandler) {
-          backHandler.remove();
-        }
-      };
-    }, [navigation])
-  );
+const saveNavigationState = async (state) => {
+  try {
+    await AsyncStorage.setItem(NAVIGATION_STATE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.warn("Failed to save navigation state:", error);
+  }
 };
 
-// Enhanced Screen wrapper with error boundary
-const ScreenWrapper = ({ children, navigation }) => {
-  usePreventGoingBack(navigation);
-
-  // Add error boundary for production
-  if (!__DEV__) {
-    try {
-      return children;
-    } catch (error) {
-      console.warn("Screen Error:", error);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "LoginPage" }],
-      });
-      return null;
-    }
+const loadNavigationState = async () => {
+  try {
+    const savedState = await AsyncStorage.getItem(NAVIGATION_STATE_KEY);
+    return savedState ? JSON.parse(savedState) : null;
+  } catch (error) {
+    console.warn("Failed to load navigation state:", error);
+    return null;
   }
+};
+
+// Enhanced Screen wrapper with state preservation
+const ScreenWrapper = ({ children, navigation, route }) => {
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("state", async (e) => {
+      await saveNavigationState({
+        routes: navigation.getState().routes,
+        currentRoute: route.name,
+      });
+    });
+
+    return unsubscribe;
+  }, [navigation, route]);
 
   return children;
 };
 
 export const UserProfileNavigator = () => {
   const [isConnected, setIsConnected] = useState(true);
+  const [initialRoute, setInitialRoute] = useState("LoginPage");
   const [isNavigationReady, setIsNavigationReady] = useState(false);
+
+  // Load saved navigation state on startup
+  useEffect(() => {
+    const initializeNavigation = async () => {
+      const savedState = await loadNavigationState();
+      if (savedState?.currentRoute === "OTPVerificationPage") {
+        const hasEmail = await AsyncStorage.getItem("userEmail");
+        if (hasEmail) {
+          setInitialRoute("OTPVerificationPage");
+        }
+      }
+      setIsNavigationReady(true);
+    };
+
+    initializeNavigation();
+  }, []);
 
   // Enhanced network monitoring
   useEffect(() => {
-    let mounted = true;
-
     const unsubscribe = NetInfo.addEventListener((state) => {
-      if (mounted) {
-        setIsConnected(state.isConnected);
-      }
+      setIsConnected(state.isConnected);
     });
 
-    // Initialize network state
-    NetInfo.fetch().then((state) => {
-      if (mounted) {
-        setIsConnected(state.isConnected);
-        setIsNavigationReady(true);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      unsubscribe();
-    };
+    return unsubscribe;
   }, []);
 
   if (!isNavigationReady) {
     return null;
   }
 
-  if (!isConnected) {
-    return (
-      <NetworkErrorModal
-        visible={!isConnected}
-        onRetry={async () => {
-          try {
-            const netInfo = await NetInfo.fetch();
-            setIsConnected(netInfo.isConnected);
-          } catch (error) {
-            console.warn("Network check failed:", error);
-          }
-        }}
-      />
-    );
-  }
-
   return (
     <UserProfileStack.Navigator
-      initialRouteName="LoginPage"
+      initialRouteName={initialRoute}
       screenOptions={{
         headerShown: false,
         gestureEnabled: false,
         animation: Platform.OS === "android" ? "none" : "slide_from_right",
         animationEnabled: Platform.OS === "ios",
-        freezeOnBlur: true, // Optimize memory usage
-        screenListeners: {
-          beforeRemove: (e) => {
-            e.preventDefault();
-            Alert.alert(
-              "Go Back",
-              "Are you sure you want to go back?",
-              [
-                { text: "Cancel", style: "cancel", onPress: () => {} },
-                {
-                  text: "Yes",
-                  onPress: () => {
-                    try {
-                      e.data.action;
-                    } catch (error) {
-                      // Fallback navigation if action fails
-                      navigation.reset({
-                        index: 0,
-                        routes: [{ name: "LoginPage" }],
-                      });
-                    }
-                  },
-                },
-              ],
-              { cancelable: false }
-            );
-          },
-          state: (e) => {
-            // Clean up any resources when screen state changes
-            if (Platform.OS === "android") {
-              global.gc && global.gc();
-            }
-          },
-        },
+        freezeOnBlur: false, // Changed to false to prevent screen disposal
+        detachInactiveScreens: false, // Prevent screen detachment
       }}
     >
       {[
@@ -201,13 +110,14 @@ export const UserProfileNavigator = () => {
         { name: "Map", component: Map },
         { name: "OTPVerificationPage", component: OTPVerificationPage },
         { name: "ForgotPasswordEmail", component: ForgotPasswordEmail },
+        { name: "NetworkErrorModal", component: NetworkErrorModal },
       ].map(({ name, component }) => (
         <UserProfileStack.Screen
           key={name}
           name={name}
           options={{
             gestureEnabled: false,
-            freezeOnBlur: true,
+            freezeOnBlur: false,
           }}
         >
           {(props) => (
