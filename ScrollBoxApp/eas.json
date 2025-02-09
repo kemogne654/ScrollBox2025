@@ -7,8 +7,7 @@
   "build": {
     "production": {
       "android": {
-        "buildType": "apk",
-        "resourceClass": "large"
+        "buildType": "apk"
       }
     }
   }
