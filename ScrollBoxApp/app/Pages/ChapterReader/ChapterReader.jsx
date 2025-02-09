@@ -125,12 +125,24 @@ const ChapterReader = ({
   }, [language, lastLanguage, lastToken]);
 
   useEffect(() => {
+    let mounted = true;
+
     const setupReader = async () => {
       try {
+        setLoading(true);
+        setError(null);
+
+        // Ensure we have a valid chapterId
+        if (!chapterId) {
+          throw new Error("No chapter ID provided");
+        }
+
         const subscription = Dimensions.addEventListener(
           "change",
           ({ window }) => {
-            setDimensions(window);
+            if (mounted) {
+              setDimensions(window);
+            }
           }
         );
 
@@ -138,6 +150,7 @@ const ChapterReader = ({
         await loadChapter();
 
         return () => {
+          mounted = false;
           subscription?.remove();
           ScreenOrientation.lockAsync(
             ScreenOrientation.OrientationLock.PORTRAIT
@@ -145,11 +158,21 @@ const ChapterReader = ({
         };
       } catch (error) {
         console.error("Setup error:", error);
-        handleError(error);
+        if (mounted) {
+          handleError(error);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     setupReader();
+
+    return () => {
+      mounted = false;
+    };
   }, [chapterId]);
 
   const handleError = (error) => {

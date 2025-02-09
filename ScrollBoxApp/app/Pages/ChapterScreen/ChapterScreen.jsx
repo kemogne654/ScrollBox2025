@@ -86,6 +86,16 @@ const ChapterScreen = () => {
   const [isMessageModalVisible, setIsMessageModalVisible] = useState(false);
   const [messageModalMessage, setMessageModalMessage] = useState("");
   const [messageModalType, setMessageModalType] = useState("info");
+  const currentIndex = chapters.findIndex(
+    (ch) => ch.id === selectedChapterForReading
+  );
+  const nextChapterId =
+    currentIndex !== -1 && currentIndex < chapters.length - 1
+      ? chapters[currentIndex + 1].id
+      : null;
+  const previousChapterId =
+    currentIndex > 0 ? chapters[currentIndex - 1].id : null;
+
   useEffect(() => {
     const fetchUserId = async () => {
       try {
@@ -1122,30 +1132,41 @@ const ChapterScreen = () => {
     };
 
     const handleReadOrBuyClick = async () => {
-      if (isPurchased || isFirstChapter) {
-        const token = await AsyncStorage.getItem("userToken");
-        if (!token) {
-          navigation.navigate("UserProfile", { screen: "LoginPage" });
-          return;
+      try {
+        if (isPurchased || isFirstChapter) {
+          const token = await AsyncStorage.getItem("userToken");
+          if (!token) {
+            navigation.navigate("UserProfile", { screen: "LoginPage" });
+            return;
+          }
+
+          // Store chapter data
+          const selectedChapterData = {
+            id: chapter.id,
+            language: selectedLanguage,
+          };
+
+          await AsyncStorage.setItem(
+            "selectedChapterForReading",
+            JSON.stringify(selectedChapterData)
+          );
+
+          // Add a small delay before setting the chapter
+          setTimeout(() => {
+            setSelectedChapterForReading(chapter.id);
+          }, 100);
+        } else {
+          const addedToCart = await handleAddToCart(chapter.id);
+          if (addedToCart) {
+            setIsPurchaseModalVisible(true);
+          }
         }
-
-        // ✅ Store chapter along with language in AsyncStorage
-        const selectedChapterData = {
-          id: chapter.id,
-          language: selectedLanguage,
-        };
-
-        await AsyncStorage.setItem(
-          "selectedChapterForReading",
-          JSON.stringify(selectedChapterData)
+      } catch (error) {
+        console.error("Error opening chapter:", error);
+        Alert.alert(
+          "Error",
+          "There was an error opening the chapter. Please try again."
         );
-
-        setSelectedChapterForReading(chapter.id);
-      } else {
-        const addedToCart = await handleAddToCart(chapter.id);
-        if (addedToCart) {
-          setIsPurchaseModalVisible(true);
-        }
       }
     };
 
@@ -1493,15 +1514,23 @@ const ChapterScreen = () => {
           </SafeAreaView>
         </Modal>
       )}
-      {!visibleCommentForChapter && <FloatingBasketButton />}
       {selectedChapterForReading && (
-        <ChapterReader
-          chapterId={selectedChapterForReading}
-          onClose={() => setSelectedChapterForReading(null)}
-          nextChapterId={"nextChapterIdHere"}
-          previousChapterId={"previousChapterIdHere"}
-          nextChapterPurchased={purchasedChapters.includes("nextChapterIdHere")}
-        />
+        <Modal
+          visible={selectedChapterForReading !== null}
+          animationType="fade"
+          onRequestClose={() => setSelectedChapterForReading(null)}
+        >
+          <ChapterReader
+            chapterId={selectedChapterForReading}
+            onClose={() => setSelectedChapterForReading(null)}
+            nextChapterId={nextChapterId ?? null}
+            previousChapterId={previousChapterId ?? null}
+            nextChapterPurchased={purchasedChapters.includes(
+              nextChapterId ?? ""
+            )}
+            language={selectedLanguage}
+          />
+        </Modal>
       )}
       <MessageModal
         visible={isMessageModalVisible}
