@@ -2,13 +2,13 @@ import "react-native-gesture-handler";
 import "react-native-reanimated";
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  View,
   StyleSheet,
   Platform,
   UIManager,
   LogBox,
   Alert,
   BackHandler,
+  AppState,
 } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { useNavigationContainerRef } from "@react-navigation/native";
@@ -33,7 +33,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Suppress specific logs
 LogBox.ignoreLogs([
   "Require cycle:",
   "[react-native-gesture-handler]",
@@ -41,10 +40,8 @@ LogBox.ignoreLogs([
   "ColorPropType will be removed",
 ]);
 
-// Prevent auto-hiding the splash screen
 SplashScreen.preventAutoHideAsync();
 
-// Navigation stack
 const Stack = createNativeStackNavigator();
 
 const AppNavigator = () => (
@@ -52,17 +49,64 @@ const AppNavigator = () => (
     initialRouteName="Home"
     screenOptions={{
       headerShown: false,
-      gestureEnabled: true,
+      gestureEnabled: Platform.OS === "ios",
       gestureDirection: "horizontal",
-      animation: "slide_from_right",
-      animationEnabled: true,
+      animation: Platform.OS === "android" ? "none" : "slide_from_right",
+      animationEnabled: Platform.OS === "ios",
+      screenListeners: {
+        beforeRemove: (e) => {
+          e.preventDefault();
+          Alert.alert(
+            "Go Back",
+            "Are you sure you want to go back?",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Yes",
+                onPress: () => e.data.action,
+              },
+            ],
+            { cancelable: false }
+          );
+        },
+      },
     }}
   >
-    <Stack.Screen name="Home" component={HomeScreen} />
-    <Stack.Screen name="SecondHomePage" component={SecondHomePage} />
-    <Stack.Screen name="ChapterReader" component={ChapterReader} />
-    <Stack.Screen name="ChapterScreen" component={ChapterScreen} />
-    <Stack.Screen name="UserProfile" component={UserProfileNavigator} />
+    <Stack.Screen
+      name="Home"
+      component={HomeScreen}
+      options={{
+        freezeOnBlur: true,
+      }}
+    />
+    <Stack.Screen
+      name="SecondHomePage"
+      component={SecondHomePage}
+      options={{
+        freezeOnBlur: true,
+      }}
+    />
+    <Stack.Screen
+      name="ChapterReader"
+      component={ChapterReader}
+      options={{
+        freezeOnBlur: true,
+      }}
+    />
+    <Stack.Screen
+      name="ChapterScreen"
+      component={ChapterScreen}
+      options={{
+        freezeOnBlur: true,
+      }}
+    />
+    <Stack.Screen
+      name="UserProfile"
+      component={UserProfileNavigator}
+      options={{
+        freezeOnBlur: true,
+      }}
+    />
   </Stack.Navigator>
 );
 
@@ -70,17 +114,71 @@ function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const navigationRef = useNavigationContainerRef();
+  const [appState, setAppState] = useState(AppState.currentState);
+
+  // Handle app state changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (appState.match(/inactive|background/) && nextAppState === "active") {
+        navigationRef.current?.reset({
+          index: 0,
+          routes: [{ name: "Home" }],
+        });
+      }
+      setAppState(nextAppState);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [appState]);
+
+  // Handle back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (navigationRef.current?.canGoBack()) {
+          Alert.alert(
+            "Go Back",
+            "Are you sure you want to go back?",
+            [
+              { text: "Cancel", style: "cancel", onPress: () => {} },
+              {
+                text: "Yes",
+                onPress: () => navigationRef.current?.goBack(),
+              },
+            ],
+            { cancelable: false }
+          );
+          return true;
+        } else {
+          Alert.alert(
+            "Exit App",
+            "Are you sure you want to exit?",
+            [
+              { text: "Cancel", style: "cancel", onPress: () => {} },
+              { text: "Exit", onPress: () => BackHandler.exitApp() },
+            ],
+            { cancelable: false }
+          );
+          return true;
+        }
+      }
+    );
+
+    return () => backHandler.remove();
+  }, []);
 
   useEffect(() => {
     const prepareApp = async () => {
       try {
-        // Perform any preloading tasks
         await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (e) {
         console.warn("Initialization error:", e);
         Alert.alert(
           "Error",
-          "An error occurred during initialization. Restarting the app.",
+          "An error occurred during initialization. Please restart the app.",
           [{ text: "Close", onPress: () => BackHandler.exitApp() }]
         );
       } finally {
@@ -91,15 +189,12 @@ function RootLayout() {
     prepareApp();
   }, []);
 
-  // Network connectivity check
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsConnected(state.isConnected);
     });
 
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
@@ -116,7 +211,6 @@ function RootLayout() {
     return null;
   }
 
-  // Show network error modal if not connected
   if (!isConnected) {
     return (
       <NetworkErrorModal
