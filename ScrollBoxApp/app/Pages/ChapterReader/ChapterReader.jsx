@@ -1,4 +1,3 @@
-// ChapterReader.js
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -38,7 +37,6 @@ const ChapterReader = ({
   nextChapterPurchased,
   language,
 }) => {
-  // Initialize screen capture prevention
   usePreventScreenCapture();
 
   const navigation = useNavigation();
@@ -62,12 +60,10 @@ const ChapterReader = ({
   useEffect(() => {
     const setupScreenCaptureProtection = async () => {
       try {
-        // Request media library permissions for screen capture detection
         const { status } = await MediaLibrary.requestPermissionsAsync();
         setHasScreenCapturePermission(status === "granted");
 
         if (status === "granted") {
-          // Add screen capture detection listener
           const subscription = MediaLibrary.addListener(async (event) => {
             if (event.type === "capture") {
               Alert.alert(
@@ -75,8 +71,6 @@ const ChapterReader = ({
                 "Screen captures are not allowed for security reasons.",
                 [{ text: "OK" }]
               );
-
-              // Log the attempt (you could send this to your server)
               console.warn("Screen capture attempt detected");
             }
           });
@@ -98,7 +92,6 @@ const ChapterReader = ({
       try {
         const currentToken = await AsyncStorage.getItem("token");
 
-        // Handle token changes (login/logout)
         if (lastToken !== currentToken) {
           await clearAllChapterCaches();
           setLastToken(currentToken);
@@ -109,7 +102,6 @@ const ChapterReader = ({
           }
         }
 
-        // Handle language changes
         if (lastLanguage !== language) {
           await clearLanguageChapterCache(lastLanguage);
           setLastLanguage(language);
@@ -132,7 +124,6 @@ const ChapterReader = ({
         setLoading(true);
         setError(null);
 
-        // Ensure we have a valid chapterId
         if (!chapterId) {
           throw new Error("No chapter ID provided");
         }
@@ -370,7 +361,6 @@ const ChapterReader = ({
       const cacheKey = getCacheKey(language);
       const extractDir = `${FileSystem.cacheDirectory}chapter_${chapterId}_${language}/`;
 
-      // Check cache
       const cachedData = await AsyncStorage.getItem(cacheKey);
       if (cachedData) {
         const {
@@ -423,7 +413,6 @@ const ChapterReader = ({
         extractDir
       );
 
-      // Cache the results
       await AsyncStorage.setItem(
         cacheKey,
         JSON.stringify({
@@ -497,7 +486,6 @@ const ChapterReader = ({
     }
   };
 
-  // Security overlay component
   const SecurityOverlay = () => (
     <View
       style={[
