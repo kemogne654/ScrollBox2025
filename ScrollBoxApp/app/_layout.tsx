@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { useNavigationContainerRef } from "@react-navigation/native";
-import * as Linking from "expo-linking";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -100,29 +99,6 @@ function RootLayout() {
 
     return () => {
       unsubscribe();
-    };
-  }, []);
-
-  // Handle deep links manually
-  useEffect(() => {
-    const handleDeepLink = async (event) => {
-      const url = event.url || (await Linking.getInitialURL());
-
-      if (url) {
-        const { path, queryParams } = Linking.parse(url);
-        if (path === "reset-password" && queryParams?.resetToken) {
-          navigationRef.current?.navigate("ForgotPasswordPage", {
-            resetToken: queryParams.resetToken,
-          });
-        }
-      }
-    };
-
-    // Listen for deep links when app is running
-    Linking.addEventListener("url", handleDeepLink);
-
-    return () => {
-      Linking.removeEventListener("url", handleDeepLink);
     };
   }, []);
 
