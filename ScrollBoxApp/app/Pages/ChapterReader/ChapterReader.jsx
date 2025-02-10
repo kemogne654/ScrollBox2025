@@ -54,8 +54,11 @@ const ChapterReader = ({
   const [lastLanguage, setLastLanguage] = useState(language);
   const [lastToken, setLastToken] = useState(null);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [failedImages, setFailedImages] = useState(new Set());
+  const [imageLoadingStates, setImageLoadingStates] = useState({});
   const [hasScreenCapturePermission, setHasScreenCapturePermission] =
     useState(false);
+
   useEffect(() => {
     if (pages.length > 0) {
       console.log(
@@ -64,6 +67,7 @@ const ChapterReader = ({
       );
     }
   }, [pages]);
+
   useEffect(() => {
     const setupScreenCaptureProtection = async () => {
       try {
@@ -119,7 +123,7 @@ const ChapterReader = ({
       }
     };
 
-    checkAuthAndLanguage(); // Always run the function
+    checkAuthAndLanguage();
   }, [language, lastLanguage, lastToken]);
 
   useEffect(() => {
@@ -171,7 +175,56 @@ const ChapterReader = ({
       mounted = false;
     };
   }, [chapterId]);
+  const handleImageError = (index, uri) => {
+    console.error(`Failed to load image at index ${index}:`, uri);
+    setFailedImages((prev) => new Set([...prev, index]));
+    setImageLoadingStates((prev) => ({
+      ...prev,
+      [index]: "failed",
+    }));
+  };
 
+  // Add new function for handling successful image loads
+  const handleImageLoad = (index) => {
+    setImageLoadingStates((prev) => ({
+      ...prev,
+      [index]: "loaded",
+    }));
+    console.log(`Successfully loaded image at index ${index}`);
+  };
+
+  // Add new ImagePlaceholder component
+  const ImagePlaceholder = ({ index }) => (
+    <View
+      style={[
+        styles.imagePlaceholder,
+        {
+          width: dimensions.width,
+          height: dimensions.width * 1.4,
+        },
+      ]}
+    >
+      <Text style={styles.placeholderText}>
+        Image {index + 1} failed to load
+      </Text>
+      <TouchableOpacity
+        style={styles.retryImageButton}
+        onPress={() => {
+          setFailedImages((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(index);
+            return newSet;
+          });
+          setImageLoadingStates((prev) => ({
+            ...prev,
+            [index]: "loading",
+          }));
+        }}
+      >
+        <Text style={styles.retryImageButtonText}>Retry Loading</Text>
+      </TouchableOpacity>
+    </View>
+  );
   const handleError = (error) => {
     const errorMessage = error.message || "An error occurred";
     setError(errorMessage);
@@ -365,16 +418,17 @@ const ChapterReader = ({
   const fetchWithRetry = async (callback, retries = 3) => {
     for (let i = 0; i < retries; i++) {
       try {
-        return await callback(); // Calls the function passed into fetchWithRetry
+        return await callback();
       } catch (error) {
         if (error.response?.status === 401) {
           throw new Error("Unauthorized: Please log in again.");
         }
         console.warn(`Retrying... (${i + 1}/${retries})`, error.message);
-        if (i === retries - 1) throw error; // Throw error after the last retry
+        if (i === retries - 1) throw error;
       }
     }
   };
+
   const ensureDirectoryExists = async (dirPath) => {
     try {
       console.log(`Checking directory: ${dirPath}`);
@@ -384,7 +438,6 @@ const ChapterReader = ({
         console.log(`Directory doesn't exist, creating: ${dirPath}`);
         await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
 
-        // Verify directory was created
         const verifyInfo = await FileSystem.getInfoAsync(dirPath);
         if (!verifyInfo.exists) {
           throw new Error(`Failed to create directory: ${dirPath}`);
@@ -394,7 +447,6 @@ const ChapterReader = ({
         console.log(`Directory already exists: ${dirPath}`);
       }
 
-      // Test directory is writable
       const testFile = `${dirPath}/test.txt`;
       await FileSystem.writeAsStringAsync(testFile, "test");
       await FileSystem.deleteAsync(testFile, { idempotent: true });
@@ -404,6 +456,7 @@ const ChapterReader = ({
       throw new Error(`Failed to setup directory: ${error.message}`);
     }
   };
+
   const loadChapter = async () => {
     try {
       setLoading(true);
@@ -426,7 +479,6 @@ const ChapterReader = ({
       console.log("Cache directory:", baseDir);
       console.log("Target directory:", extractDir);
 
-      // Check if chapter data exists in cache
       const cachedData = await AsyncStorage.getItem(cacheKey);
       if (cachedData) {
         const {
@@ -449,10 +501,7 @@ const ChapterReader = ({
       setLoadingStage("Setting up directory...");
       setLoadingProgress(5);
 
-      // Ensure base cache directory exists
       await ensureDirectoryExists(baseDir);
-
-      // Ensure chapter directory exists
       await ensureDirectoryExists(extractDir);
 
       setLoadingStage("Fetching chapter...");
@@ -474,14 +523,12 @@ const ChapterReader = ({
       const targetPath = `${extractDir}chapter.cbz`;
       console.log(`Downloading to: ${targetPath}`);
 
-      // Download with extra validation
       const downloadedFile = await fetchWithRetry(async () => {
         const result = await FileSystem.downloadAsync(
           chapterData.signedUrl,
           targetPath
         );
 
-        // Verify download
         const fileInfo = await FileSystem.getInfoAsync(targetPath);
         if (!fileInfo.exists) {
           throw new Error(
@@ -495,13 +542,11 @@ const ChapterReader = ({
       setLoadingStage("Validating file...");
       setLoadingProgress(40);
 
-      // Validate the downloaded CBZ file
       await validateCBZFile(targetPath);
 
       setLoadingStage("Extracting images...");
       setLoadingProgress(50);
 
-      // Extract images from the CBZ file
       const extractedPages = await extractImagesFromCBZ(targetPath, extractDir);
 
       if (!extractedPages || extractedPages.length === 0) {
@@ -510,13 +555,11 @@ const ChapterReader = ({
 
       console.log(`Successfully extracted ${extractedPages.length} pages`);
 
-      // Clean up the original CBZ file
       await FileSystem.deleteAsync(targetPath, { idempotent: true });
 
       setLoadingStage("Finalizing...");
       setLoadingProgress(95);
 
-      // Cache the extracted pages
       const cacheData = {
         pages: extractedPages,
         timestamp: Date.now(),
@@ -524,7 +567,6 @@ const ChapterReader = ({
       };
       await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
 
-      // Update the UI with the extracted pages
       setPages(extractedPages);
       setLoadingProgress(100);
       console.log("Chapter loading completed successfully");
@@ -544,7 +586,6 @@ const ChapterReader = ({
           ]
         );
       } else {
-        // Add more detailed error information
         const errorDetails = `Error: ${error.message}\nType: ${error.name}\nStack: ${error.stack}`;
         console.error(errorDetails);
         handleError(new Error(`Failed to load chapter: ${error.message}`));
@@ -624,6 +665,12 @@ const ChapterReader = ({
     );
   }
 
+  if (loading || isRetrying) {
+    return (
+      <AnimatedDownloadModal progress={loadingProgress} stage={loadingStage} />
+    );
+  }
+
   if (error) {
     return (
       <View style={styles.errorContainer}>
@@ -635,6 +682,7 @@ const ChapterReader = ({
       </View>
     );
   }
+
   return (
     <View style={{ flex: 1 }}>
       <Modal visible={true} animationType="fade" statusBarTranslucent>
@@ -657,28 +705,32 @@ const ChapterReader = ({
                 style={styles.contentContainer}
               >
                 {pages.map((page, index) => (
-                  <Image
-                    key={index}
-                    source={{ uri: page.uri }}
-                    style={[
-                      styles.image,
-                      {
-                        width: dimensions.width,
-                        height: dimensions.width * 1.4,
-                        transform: [{ scale }],
-                      },
-                    ]}
-                    resizeMode="contain"
-                    fadeDuration={0}
-                    onError={(error) => {
-                      console.error(
-                        `Failed to load image at index ${index}:`,
-                        error.nativeEvent
-                      );
-                      setError(`Failed to load image: ${page.uri}`);
-                    }}
-                    onLoad={() => console.log(`Image loaded: ${page.uri}`)}
-                  />
+                  <View key={index} style={styles.pageContainer}>
+                    {failedImages.has(index) ? (
+                      <ImagePlaceholder index={index} />
+                    ) : (
+                      <Image
+                        source={{ uri: page.uri }}
+                        style={[
+                          styles.image,
+                          {
+                            width: dimensions.width,
+                            height: dimensions.width * 1.4,
+                            transform: [{ scale }],
+                          },
+                        ]}
+                        resizeMode="contain"
+                        fadeDuration={0}
+                        onError={() => handleImageError(index, page.uri)}
+                        onLoad={() => handleImageLoad(index)}
+                      />
+                    )}
+                    {imageLoadingStates[index] === "loading" && (
+                      <View style={styles.loadingOverlay}>
+                        <ActivityIndicator size="large" color="#EF7F1A" />
+                      </View>
+                    )}
+                  </View>
                 ))}
               </TouchableOpacity>
             </ScrollView>
@@ -732,6 +784,131 @@ const ChapterReader = ({
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  contentContainer: {
+    alignItems: "center",
+  },
+  image: {
+    marginVertical: 0,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#1a1a1a",
+    padding: 20,
+  },
+  errorText: {
+    color: "#fff",
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  retryButton: {
+    backgroundColor: "#EF7F1A",
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  topControls: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 44 : 24,
+    right: 20,
+    zIndex: 10,
+  },
+  bottomControls: {
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 34 : 24,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingVertical: 10,
+  },
+  closeButton: {
+    backgroundColor: "rgba(0,0,0,0.7)",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeButtonText: {
+    color: "#fff",
+    fontSize: 20,
+  },
+  navButton: {
+    backgroundColor: "#EF7F1A",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+    minWidth: 100,
+    alignItems: "center",
+  },
+  leftNav: {
+    marginRight: 10,
+  },
+  rightNav: {
+    marginLeft: 10,
+  },
+  navButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  pageIndicator: {
+    backgroundColor: "rgba(0,0,0,0.7)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
+    marginTop: 10,
+  },
+  pageIndicatorText: {
+    color: "#fff",
+    fontSize: 12,
+  },
+  imagePlaceholder: {
+    backgroundColor: "#1a1a1a",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  placeholderText: {
+    color: "#ffffff",
+    fontSize: 16,
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  retryImageButton: {
+    backgroundColor: "#EF7F1A",
+    padding: 10,
+    borderRadius: 5,
+  },
+  retryImageButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+  },
+  pageContainer: {
+    position: "relative",
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   container: {
     flex: 1,
     backgroundColor: "#000",
