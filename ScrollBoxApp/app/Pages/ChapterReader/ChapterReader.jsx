@@ -762,17 +762,6 @@ const ChapterReader = ({
                     <Text style={styles.navButtonText}>← Previous</Text>
                   </TouchableOpacity>
                 )}
-
-                {nextChapterId && (
-                  <TouchableOpacity
-                    style={[styles.navButton, styles.rightNav]}
-                    onPress={handleNextChapter}
-                  >
-                    <Text style={styles.navButtonText}>
-                      {nextChapterPurchased ? "Next →" : "Purchase →"}
-                    </Text>
-                  </TouchableOpacity>
-                )}
               </View>
             </>
           )}

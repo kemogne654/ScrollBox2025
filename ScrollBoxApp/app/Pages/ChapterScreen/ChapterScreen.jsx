@@ -26,6 +26,7 @@ import MessageModal from "../MessageModal/MessageModal";
 import i18n from "../locales/i18n";
 const { height } = Dimensions.get("window");
 import { useTranslation } from "react-i18next";
+import Loader from "../../../components/Loader";
 
 const DEFAULT_IMAGES = {
   thumbnail: require("./../../../assets/scrollboxImg/06.png"),
@@ -1457,9 +1458,7 @@ const ChapterScreen = () => {
         <View style={styles.overlay} />
 
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ffffff" />
-          </View>
+          <Loader visible={loading} />
         ) : error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>
