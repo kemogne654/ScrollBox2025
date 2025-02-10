@@ -275,7 +275,7 @@ const ChapterScreen = () => {
     return defaultImage;
   };
   const navigateBack = () => {
-    navigation.goBack();
+    navigation.navigate("Home");
   };
   const navigateToHomeScreen = () => {
     navigation.navigate("Home", {
@@ -443,27 +443,25 @@ const ChapterScreen = () => {
 
     calculateTotalAmount();
   }, [basket]);
-  const FloatingBasketButton = () => (
-    <TouchableOpacity
-      style={styles.floatingBasketButton}
-      onPress={() => {
-        if (cartItemsCount === 0) {
-          navigation.navigate("UserProfile", { screen: "LoginPage" });
-        } else {
+  const FloatingBasketButton = () => {
+    if (cartItemsCount === 0) return null; // Hide if cart is empty
+
+    return (
+      <TouchableOpacity
+        style={styles.floatingBasketButton}
+        onPress={() => {
           setIsPurchaseModalVisible(true);
-        }
-      }}
-    >
-      <View style={styles.basketButtonContent}>
-        <Text style={styles.basketButtonText}>Buy</Text>
-      </View>
-      {cartItemsCount > 0 && (
+        }}
+      >
+        <View style={styles.basketButtonContent}>
+          <Text style={styles.basketButtonText}>{t("cart.buy")}</Text>
+        </View>
         <View style={styles.basketNumberContainer}>
           <Text style={styles.basketNumber}>{cartItemsCount}</Text>
         </View>
-      )}
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const loadBasket = async () => {
     try {
@@ -747,7 +745,9 @@ const ChapterScreen = () => {
               onPress={() => removeFromBasket(item.id)}
               style={styles.purchaseModalRemoveButton}
             >
-              <Text style={styles.purchaseModalRemoveButtonText}>Remove</Text>
+              <Text style={styles.purchaseModalRemoveButtonText}>
+                {t("cart.remove")}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -769,7 +769,7 @@ const ChapterScreen = () => {
               <Text style={styles.purchaseModalCloseButtonText}>×</Text>
             </TouchableOpacity>
 
-            <Text style={styles.purchaseModalTitle}>Your Cart</Text>
+            <Text style={styles.purchaseModalTitle}>{t("cart.your_cart")}</Text>
 
             <FlatList
               data={basket}
@@ -777,14 +777,16 @@ const ChapterScreen = () => {
               keyExtractor={(item) => item.id}
               ListEmptyComponent={
                 <Text style={styles.purchaseModalEmptyBasketText}>
-                  Your basket is empty
+                  {t("cart.empty")}
                 </Text>
               }
               style={styles.purchaseModalBasketList}
             />
 
             <View style={styles.paymentMethodContainer}>
-              <Text style={styles.paymentMethodTitle}>Payment Method</Text>
+              <Text style={styles.paymentMethodTitle}>
+                {t("cart.payment_method")}
+              </Text>
 
               <View style={styles.paymentMethodImageContainer}>
                 <TouchableOpacity
@@ -836,7 +838,9 @@ const ChapterScreen = () => {
 
             <View style={styles.purchaseModalSummaryContainer}>
               <View style={styles.purchaseModalTotalRow}>
-                <Text style={styles.purchaseModalTotalText}>Total</Text>
+                <Text style={styles.purchaseModalTotalText}>
+                  {t("cart.total")}
+                </Text>
                 <Text style={styles.purchaseModalGrandTotalAmount}>
                   {totalAmount} {basket[0]?.currency || "XAF"}
                 </Text>
@@ -918,7 +922,9 @@ const ChapterScreen = () => {
               disabled={!selectedPaymentMethod || isLoading}
             >
               <Text style={styles.purchaseModalBuyButtonText}>
-                {isLoading ? "Processing..." : "Proceed to Checkout"}
+                {isLoading
+                  ? t("cart.processing")
+                  : t("cart.proceed_to_checkout")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1461,7 +1467,7 @@ const ChapterScreen = () => {
               style={styles.retryButton}
               onPress={fetchChapters}
             >
-              <Text style={styles.retryButtonText}>Retry</Text>
+              <Text style={styles.retryButtonText}>{t("general.retry")}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -1501,7 +1507,9 @@ const ChapterScreen = () => {
                 backgroundColor: "#f0f0f0",
               }}
             >
-              <Text style={{ color: "red", fontSize: 16 }}>Close</Text>
+              <Text style={{ color: "red", fontSize: 16 }}>
+                {t("general.close")}
+              </Text>
             </TouchableOpacity>
             <WebView
               source={{ uri: paymentLink }}
@@ -1538,6 +1546,7 @@ const ChapterScreen = () => {
         type={messageModalType}
         onClose={closeMessageModal}
       />
+      {!visibleCommentForChapter && <FloatingBasketButton />}
     </SafeAreaView>
   );
 };

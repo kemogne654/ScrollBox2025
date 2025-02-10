@@ -56,6 +56,11 @@
   "cart": {
     "title": "Votre Panier",
     "empty": "Votre panier est vide.",
+    "your_cart": "Votre Panier",
+    "payment_method": "Méthode de paiement",
+    "total": "Total",
+    "processing": "Traitement en cours...",
+    "proceed_to_checkout": "Passer à la caisse",
     "add_to_basket_failed": "Impossible d'ajouter le chapitre au panier. Veuillez réessayer.",
     "add_to_basket_error": "Erreur. Impossible d'ajouter le chapitre au panier.",
     "login_required_proceed": "Erreur. Vous devez être connecté pour continuer.",
@@ -80,6 +85,18 @@
     "payment_methods": "Méthode de paiement disponible",
     "login_required": "Veuillez vous connecter pour ajouter des articles à votre panier",
     "error_message": "Une erreur s'est produite lors de l'ajout au panier. Veuillez réessayer."
+  },
+  "chapter": {
+    "tome": "Tome",
+    "default_tome": "Tome 1",
+    "read": "Lire",
+    "buy": "Acheter",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "purchase": "Acheter"
+  },
+  "general": {
+    "close": "Fermer"
   },
   "network_error": {
     "title": "Erreur Réseau",

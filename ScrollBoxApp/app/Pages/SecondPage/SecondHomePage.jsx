@@ -144,7 +144,7 @@ const SecondHomePage = () => {
             if (navigation.canGoBack()) {
               navigation.goBack();
             } else {
-              navigation.navigate("ActorPage");
+              navigation.navigate("UserProfile", { screen: "ActorPage" });
             }
           }}
         >
@@ -160,7 +160,7 @@ const SecondHomePage = () => {
             if (navigation.canGoBack()) {
               navigation.goBack();
             } else {
-              navigation.navigate("Map");
+              navigation.navigate("UserProfile", { screen: "Map" });
             }
           }}
         >
