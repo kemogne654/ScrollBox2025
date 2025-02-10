@@ -1,10 +1,26 @@
-node_modules
-.git
-android
-ios
-assets/videos
+# Exclude dependencies and unnecessary files
+node_modules/
+.git/
+android/.gradle/
+android/.idea/
+android/app/build/
+ios/Pods/
+ios/build/
+ios/.DS_Store
+
+# Exclude local Expo and IDE files
+.expo/
+.vscode/
+.idea/
+*.log
+
+# Exclude unnecessary assets
+assets/videos/
 *.mp4
 *.mov
 *.zip
 *.rar
 *.psd
+*.ai
+*.eps
+*.svg
