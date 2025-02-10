@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -13,7 +13,9 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
+  AppState,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import ApiService from "../../Services/ApiService";
@@ -31,9 +33,66 @@ export default function ForgotPasswordEmail() {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState) => {
+      if (nextAppState === "background") {
+        // Save state when app goes to background
+        await AsyncStorage.setItem(
+          "forgotPasswordState",
+          JSON.stringify({
+            email,
+            hasBlurred,
+            hasSubmitted,
+          })
+        );
+      } else if (nextAppState === "active") {
+        // Restore state when app becomes active
+        const savedState = await AsyncStorage.getItem("forgotPasswordState");
+        if (savedState) {
+          const {
+            email: savedEmail,
+            hasBlurred: savedHasBlurred,
+            hasSubmitted: savedHasSubmitted,
+          } = JSON.parse(savedState);
+
+          setEmail(savedEmail);
+          setHasBlurred(savedHasBlurred);
+          setHasSubmitted(savedHasSubmitted);
+
+          // Validate email if there was previous interaction
+          if (savedHasBlurred || savedHasSubmitted) {
+            validateEmailInput(savedEmail);
+          }
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [email, hasBlurred, hasSubmitted]);
+  useEffect(() => {
+    return () => {
+      // Cleanup function to reset state
+      setEmail("");
+      setEmailError("");
+      setHasBlurred(false);
+      setHasSubmitted(false);
+      setIsSuccessModalVisible(false);
+    };
+  }, []);
 
   const handleCloseModal = () => {
-    navigation.navigate("Home");
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("Home");
+    }
   };
 
   const handleEmailChange = useCallback(

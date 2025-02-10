@@ -2,28 +2,30 @@ import "react-native-gesture-handler";
 import "react-native-reanimated";
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  View,
-  Dimensions,
   StyleSheet,
   Platform,
   UIManager,
   LogBox,
+  Alert,
+  BackHandler,
+  AppState,
 } from "react-native";
+import NetInfo from "@react-native-community/netinfo";
+import { NavigationContainer } from "@react-navigation/native";
+import { useNavigationContainerRef } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import ChapterReader from "../Pages/ChapterReader/ChapterReader";
+import * as SplashScreen from "expo-splash-screen";
+import NetworkErrorModal from "../Pages/NetworkErrorModal/NetworkErrorModal";
+
 // Import screens
 import HomeScreen from "./index";
 import SecondHomePage from "../Pages/SecondPage/SecondHomePage";
+import ChapterReader from "../Pages/ChapterReader/ChapterReader";
 import ChapterScreen from "../Pages/ChapterScreen/ChapterScreen";
-import ActorPage from "../Pages/ActorPage/ActorPage";
-import GalleryPage from "../Pages/Gallery/GalleryPage";
-import CommentSection from "../Pages/Comment/Comment";
-import PurchaseModal from "../Pages/PurchaseModal/PurchaseModal";
-import DicoPage from "../Pages/Deco/Deco";
-import Map from "../Pages/map/Map";
+import UserProfileNavigator from "./UserProfileNavigator";
+
 // Enable layout animations on Android
 if (
   Platform.OS === "android" &&
@@ -34,7 +36,7 @@ if (
 
 LogBox.ignoreLogs([
   "Require cycle:",
-  "[react-native-gesture-handler] Seems like you're using an old API with gesture components",
+  "[react-native-gesture-handler]",
   "ViewPropTypes will be removed",
   "ColorPropType will be removed",
 ]);
@@ -43,96 +45,160 @@ SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
 
-// Define custom transition configuration
-const customTransition = {
-  animation: "spring",
-  config: {
-    stiffness: 1000,
-    damping: 500,
-    mass: 3,
-    overshootClamping: false,
-    restDisplacementThreshold: 0.01,
-    restSpeedThreshold: 0.01,
-  },
-};
-
-// Main navigation configuration
 const AppNavigator = () => (
   <Stack.Navigator
     initialRouteName="Home"
     screenOptions={{
       headerShown: false,
-      gestureEnabled: true,
+      gestureEnabled: Platform.OS === "ios", // Only enable gestures on iOS
       gestureDirection: "horizontal",
-      animation: "slide_from_right",
-      animationEnabled: true,
-      // Add custom transition options
-      transitionSpec: {
-        open: customTransition,
-        close: customTransition,
-      },
-      cardStyleInterpolator: ({ current, layouts }) => {
-        return {
-          cardStyle: {
-            transform: [
+      animation: Platform.OS === "android" ? "none" : "slide_from_right", // Disable animations on Android
+      animationEnabled: Platform.OS === "ios",
+      screenListeners: {
+        beforeRemove: (e) => {
+          // Prevent accidental screen removal
+          e.preventDefault();
+          Alert.alert(
+            "Go Back",
+            "Are you sure you want to go back?",
+            [
+              { text: "Cancel", style: "cancel" },
               {
-                translateX: current.progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [layouts.screen.width, 0],
-                }),
-              },
-              {
-                scale: current.progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.95, 1],
-                }),
+                text: "Yes",
+                onPress: () => e.data.action,
               },
             ],
-            opacity: current.progress.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.5, 1],
-            }),
-          },
-          overlayStyle: {
-            opacity: current.progress.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 0.3],
-            }),
-          },
-        };
+            { cancelable: false }
+          );
+        },
       },
     }}
   >
-    <Stack.Screen name="Home" component={HomeScreen} />
-    <Stack.Screen name="SecondHomePage" component={SecondHomePage} />
-    <Stack.Screen name="ChapterReader" component={ChapterReader} />
-    <Stack.Screen name="loginPage" component={AuthModal} />
-    <Stack.Screen name="ChapterScreen" component={ChapterScreen} />
-    <Stack.Screen name="ActorPage" component={ActorPage} />
-    <Stack.Screen name="GalleryPage" component={GalleryPage} />
-    <Stack.Screen name="Comments" component={CommentSection} />
-    <Stack.Screen name="PurchaseModal" component={PurchaseModal} />
-    <Stack.Screen name="Deco" component={DicoPage} />
-    <Stack.Screen name="Map" component={Map} />
+    <Stack.Screen
+      name="Home"
+      component={HomeScreen}
+      options={{
+        freezeOnBlur: true, // Optimize performance by freezing inactive screens
+      }}
+    />
+    <Stack.Screen
+      name="SecondHomePage"
+      component={SecondHomePage}
+      options={{
+        freezeOnBlur: true,
+      }}
+    />
+    <Stack.Screen
+      name="ChapterReader"
+      component={ChapterReader}
+      options={{
+        freezeOnBlur: true,
+      }}
+    />
+    <Stack.Screen
+      name="ChapterScreen"
+      component={ChapterScreen}
+      options={{
+        freezeOnBlur: true,
+      }}
+    />
+    <Stack.Screen
+      name="UserProfile"
+      component={UserProfileNavigator}
+      options={{
+        freezeOnBlur: true,
+      }}
+    />
   </Stack.Navigator>
 );
 
-function App() {
+function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
+  const navigationRef = useNavigationContainerRef();
+  const [appState, setAppState] = useState(AppState.currentState);
+
+  // Handle app state changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (appState.match(/inactive|background/) && nextAppState === "active") {
+        // App has come to foreground - reset navigation if needed
+        navigationRef.current?.reset({
+          index: 0,
+          routes: [{ name: "Home" }],
+        });
+      }
+      setAppState(nextAppState);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [appState]);
+
+  // Handle back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (navigationRef.current?.canGoBack()) {
+          Alert.alert(
+            "Go Back",
+            "Are you sure you want to go back?",
+            [
+              { text: "Cancel", style: "cancel", onPress: () => {} },
+              {
+                text: "Yes",
+                onPress: () => navigationRef.current?.goBack(),
+              },
+            ],
+            { cancelable: false }
+          );
+          return true;
+        } else {
+          // At root screen
+          Alert.alert(
+            "Exit App",
+            "Are you sure you want to exit?",
+            [
+              { text: "Cancel", style: "cancel", onPress: () => {} },
+              { text: "Exit", onPress: () => BackHandler.exitApp() },
+            ],
+            { cancelable: false }
+          );
+          return true;
+        }
+      }
+    );
+
+    return () => backHandler.remove();
+  }, []);
 
   useEffect(() => {
-    async function prepare() {
+    const prepareApp = async () => {
       try {
-        await Promise.all([
-          new Promise((resolve) => setTimeout(resolve, 2000)),
-        ]);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (e) {
         console.warn("Initialization error:", e);
+        Alert.alert(
+          "Error",
+          "An error occurred during initialization. Please restart the app.",
+          [{ text: "Close", onPress: () => BackHandler.exitApp() }]
+        );
       } finally {
         setAppIsReady(true);
       }
-    }
-    prepare();
+    };
+
+    prepareApp();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsConnected(state.isConnected);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
@@ -149,11 +215,22 @@ function App() {
     return null;
   }
 
+  if (!isConnected) {
+    return (
+      <NetworkErrorModal
+        visible={!isConnected}
+        onRetry={() => NetInfo.fetch()}
+      />
+    );
+  }
+
   return (
     <SafeAreaProvider>
-      <GestureHandlerRootView style={styles.root} onLayout={onLayoutRootView}>
-        <AppNavigator />
-      </GestureHandlerRootView>
+      <NavigationContainer ref={navigationRef}>
+        <GestureHandlerRootView style={styles.root} onLayout={onLayoutRootView}>
+          <AppNavigator />
+        </GestureHandlerRootView>
+      </NavigationContainer>
     </SafeAreaProvider>
   );
 }
@@ -164,4 +241,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default App;
+export default RootLayout;

@@ -52,7 +52,11 @@ export default function SignUpPage() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const handleCloseModal = () => {
-    navigation.navigate("Home");
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("Home");
+    }
   };
 
   const validateEmail = (email) => {
@@ -137,7 +141,7 @@ export default function SignUpPage() {
         response?.message?.includes("OTP")
       ) {
         // Navigate to OTP Verification Page
-        navigation.navigate("OTPVerificationPage");
+        navigation.replace("OTPVerificationPage");
         return;
       }
 
