@@ -56,7 +56,14 @@ const ChapterReader = ({
   const [isRetrying, setIsRetrying] = useState(false);
   const [hasScreenCapturePermission, setHasScreenCapturePermission] =
     useState(false);
-
+  useEffect(() => {
+    if (pages.length > 0) {
+      console.log(
+        "Pages URIs:",
+        pages.map((page) => page.uri)
+      );
+    }
+  }, [pages]);
   useEffect(() => {
     const setupScreenCaptureProtection = async () => {
       try {
@@ -91,20 +98,19 @@ const ChapterReader = ({
     const checkAuthAndLanguage = async () => {
       try {
         const currentToken = await AsyncStorage.getItem("token");
+        if (!currentToken) {
+          navigation.navigate("Login");
+          return;
+        }
 
         if (lastToken !== currentToken) {
-          await clearAllChapterCaches();
           setLastToken(currentToken);
-
-          if (!currentToken) {
-            navigation.navigate("Login");
-            return;
-          }
+          await clearAllChapterCaches();
         }
 
         if (lastLanguage !== language) {
-          await clearLanguageChapterCache(lastLanguage);
           setLastLanguage(language);
+          await clearLanguageChapterCache(lastLanguage);
           await loadChapter();
         }
       } catch (error) {
@@ -113,7 +119,7 @@ const ChapterReader = ({
       }
     };
 
-    checkAuthAndLanguage();
+    checkAuthAndLanguage(); // Always run the function
   }, [language, lastLanguage, lastToken]);
 
   useEffect(() => {
@@ -248,28 +254,32 @@ const ChapterReader = ({
     try {
       const fileInfo = await FileSystem.getInfoAsync(fileUri);
       if (!fileInfo.exists || fileInfo.size < 100) {
-        throw new Error("Invalid CBZ file: File too small or doesn't exist");
+        throw new Error(
+          "Invalid CBZ file: File is too small or does not exist."
+        );
       }
-
       const headerData = await FileSystem.readAsStringAsync(fileUri, {
         encoding: FileSystem.EncodingType.Base64,
         position: 0,
         length: 4,
       });
-
       const headerBuffer = Buffer.from(headerData, "base64");
-      if (headerBuffer.readUInt32LE(0) !== 0x04034b50) {
-        throw new Error("Invalid CBZ file: Not a valid ZIP/CBZ format");
+      const zipSignature = headerBuffer.toString("hex");
+      if (!["504b0304", "504b0506", "504b0708"].includes(zipSignature)) {
+        throw new Error("Invalid CBZ file: Not a valid ZIP format");
       }
 
+      console.log("CBZ file is valid.");
       return true;
     } catch (error) {
+      console.error("CBZ validation failed:", error);
       throw new Error(`CBZ validation failed: ${error.message}`);
     }
   };
 
   const extractImagesFromCBZ = async (cbzUri, extractDir) => {
     try {
+      console.log("Starting CBZ extraction...");
       const zip = new JSZip();
       let zipData = "";
 
@@ -292,7 +302,7 @@ const ChapterReader = ({
         setLoadingProgress(50 + progress);
       }
 
-      setLoadingStage("Extracting images...");
+      console.log("CBZ file read successfully. Extracting images...");
 
       await zip.loadAsync(zipData, { base64: true });
 
@@ -318,6 +328,10 @@ const ChapterReader = ({
         throw new Error("No valid images found in CBZ file");
       }
 
+      console.log(
+        `Found ${sortedFiles.length} valid images. Saving to disk...`
+      );
+
       for (let i = 0; i < sortedFiles.length; i++) {
         const [filename, file] = sortedFiles[i];
         if (!file.dir) {
@@ -332,18 +346,64 @@ const ChapterReader = ({
           });
           imageFiles.push(newFilename);
 
+          console.log(`Saved image: ${newFilename}`);
+
           setLoadingProgress(
             Math.min(90, 50 + Math.floor((i / sortedFiles.length) * 40))
           );
         }
       }
 
+      console.log("Image extraction completed successfully.");
       return imageFiles.map((file) => ({ uri: `file://${file}` }));
     } catch (error) {
+      console.error("Image extraction failed:", error);
       throw new Error(`Image extraction failed: ${error.message}`);
     }
   };
 
+  const fetchWithRetry = async (callback, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await callback(); // Calls the function passed into fetchWithRetry
+      } catch (error) {
+        if (error.response?.status === 401) {
+          throw new Error("Unauthorized: Please log in again.");
+        }
+        console.warn(`Retrying... (${i + 1}/${retries})`, error.message);
+        if (i === retries - 1) throw error; // Throw error after the last retry
+      }
+    }
+  };
+  const ensureDirectoryExists = async (dirPath) => {
+    try {
+      console.log(`Checking directory: ${dirPath}`);
+      const dirInfo = await FileSystem.getInfoAsync(dirPath);
+
+      if (!dirInfo.exists) {
+        console.log(`Directory doesn't exist, creating: ${dirPath}`);
+        await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
+
+        // Verify directory was created
+        const verifyInfo = await FileSystem.getInfoAsync(dirPath);
+        if (!verifyInfo.exists) {
+          throw new Error(`Failed to create directory: ${dirPath}`);
+        }
+        console.log(`Successfully created directory: ${dirPath}`);
+      } else {
+        console.log(`Directory already exists: ${dirPath}`);
+      }
+
+      // Test directory is writable
+      const testFile = `${dirPath}/test.txt`;
+      await FileSystem.writeAsStringAsync(testFile, "test");
+      await FileSystem.deleteAsync(testFile, { idempotent: true });
+      console.log(`Directory is writable: ${dirPath}`);
+    } catch (error) {
+      console.error(`Directory setup error: ${error.message}`);
+      throw new Error(`Failed to setup directory: ${error.message}`);
+    }
+  };
   const loadChapter = async () => {
     try {
       setLoading(true);
@@ -359,8 +419,14 @@ const ChapterReader = ({
       setLastToken(token);
 
       const cacheKey = getCacheKey(language);
-      const extractDir = `${FileSystem.cacheDirectory}chapter_${chapterId}_${language}/`;
+      const baseDir = FileSystem.cacheDirectory;
+      const chapterDir = `chapter_${chapterId}_${language}`;
+      const extractDir = `${baseDir}${chapterDir}/`;
 
+      console.log("Cache directory:", baseDir);
+      console.log("Target directory:", extractDir);
+
+      // Check if chapter data exists in cache
       const cachedData = await AsyncStorage.getItem(cacheKey);
       if (cachedData) {
         const {
@@ -376,57 +442,113 @@ const ChapterReader = ({
           setLoading(false);
           return;
         }
+        console.log("Clearing old cache...");
         await clearLanguageChapterCache(language);
       }
+
+      setLoadingStage("Setting up directory...");
+      setLoadingProgress(5);
+
+      // Ensure base cache directory exists
+      await ensureDirectoryExists(baseDir);
+
+      // Ensure chapter directory exists
+      await ensureDirectoryExists(extractDir);
 
       setLoadingStage("Fetching chapter...");
       setLoadingProgress(10);
 
-      const chapterData = await ApiService.getChapterContent(
-        chapterId,
-        token,
-        language
+      const chapterData = await fetchWithRetry(
+        async () =>
+          await ApiService.getChapterContent(chapterId, language, token),
+        3
       );
+
       if (!chapterData?.signedUrl) {
-        throw new Error("Failed to get chapter URL");
+        throw new Error("Failed to fetch chapter data or signed URL");
       }
 
       setLoadingStage("Downloading...");
       setLoadingProgress(20);
 
-      await FileSystem.makeDirectoryAsync(extractDir, { intermediates: true });
-      const downloadedFile = await FileSystem.downloadAsync(
-        chapterData.signedUrl,
-        `${extractDir}chapter.cbz`
-      );
+      const targetPath = `${extractDir}chapter.cbz`;
+      console.log(`Downloading to: ${targetPath}`);
 
-      setLoadingStage("Validating CBZ...");
+      // Download with extra validation
+      const downloadedFile = await fetchWithRetry(async () => {
+        const result = await FileSystem.downloadAsync(
+          chapterData.signedUrl,
+          targetPath
+        );
+
+        // Verify download
+        const fileInfo = await FileSystem.getInfoAsync(targetPath);
+        if (!fileInfo.exists) {
+          throw new Error(
+            `Download completed but file not found at: ${targetPath}`
+          );
+        }
+
+        return result;
+      }, 3);
+
+      setLoadingStage("Validating file...");
       setLoadingProgress(40);
 
-      await validateCBZFile(downloadedFile.uri);
+      // Validate the downloaded CBZ file
+      await validateCBZFile(targetPath);
 
-      setLoadingStage("Processing images...");
+      setLoadingStage("Extracting images...");
       setLoadingProgress(50);
 
-      const extractedPages = await extractImagesFromCBZ(
-        downloadedFile.uri,
-        extractDir
-      );
+      // Extract images from the CBZ file
+      const extractedPages = await extractImagesFromCBZ(targetPath, extractDir);
 
-      await AsyncStorage.setItem(
-        cacheKey,
-        JSON.stringify({
-          pages: extractedPages,
-          timestamp: Date.now(),
-          cachedLanguage: language,
-        })
-      );
+      if (!extractedPages || extractedPages.length === 0) {
+        throw new Error("No valid images found in the chapter file");
+      }
 
+      console.log(`Successfully extracted ${extractedPages.length} pages`);
+
+      // Clean up the original CBZ file
+      await FileSystem.deleteAsync(targetPath, { idempotent: true });
+
+      setLoadingStage("Finalizing...");
+      setLoadingProgress(95);
+
+      // Cache the extracted pages
+      const cacheData = {
+        pages: extractedPages,
+        timestamp: Date.now(),
+        cachedLanguage: language,
+      };
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+
+      // Update the UI with the extracted pages
       setPages(extractedPages);
       setLoadingProgress(100);
+      console.log("Chapter loading completed successfully");
     } catch (error) {
       console.error("Chapter loading error:", error);
-      handleError(error);
+      console.error("Error stack:", error.stack);
+
+      if (error.message.includes("Unauthorized")) {
+        Alert.alert(
+          "Session Expired",
+          "Please log in again to continue reading.",
+          [
+            {
+              text: "OK",
+              onPress: () => navigation.navigate("Login"),
+            },
+          ]
+        );
+      } else {
+        // Add more detailed error information
+        const errorDetails = `Error: ${error.message}\nType: ${error.name}\nStack: ${error.stack}`;
+        console.error(errorDetails);
+        handleError(new Error(`Failed to load chapter: ${error.message}`));
+      }
     } finally {
       setLoading(false);
     }
@@ -513,7 +635,6 @@ const ChapterReader = ({
       </View>
     );
   }
-
   return (
     <View style={{ flex: 1 }}>
       <Modal visible={true} animationType="fade" statusBarTranslucent>
@@ -549,10 +670,14 @@ const ChapterReader = ({
                     ]}
                     resizeMode="contain"
                     fadeDuration={0}
-                    onError={() => {
-                      console.error(`Failed to load image at index ${index}`);
-                      setError("Failed to load page images");
+                    onError={(error) => {
+                      console.error(
+                        `Failed to load image at index ${index}:`,
+                        error.nativeEvent
+                      );
+                      setError(`Failed to load image: ${page.uri}`);
                     }}
+                    onLoad={() => console.log(`Image loaded: ${page.uri}`)}
                   />
                 ))}
               </TouchableOpacity>

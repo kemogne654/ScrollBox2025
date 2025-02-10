@@ -275,7 +275,11 @@ const ChapterScreen = () => {
     return defaultImage;
   };
   const navigateBack = () => {
-    navigation.navigate("Home");
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("Home");
+    }
   };
   const navigateToHomeScreen = () => {
     navigation.navigate("Home", {
