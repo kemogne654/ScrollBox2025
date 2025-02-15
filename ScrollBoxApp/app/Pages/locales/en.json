@@ -23,6 +23,11 @@
   "cart": {
     "title": "Your Cart",
     "empty": "Your cart is empty.",
+    "your_cart": "Your Cart",
+    "payment_method": "Payment Method",
+    "total": "Total",
+    "processing": "Processing...",
+    "proceed_to_checkout": "Proceed to Checkout",
     "clear": "Clear Cart",
     "total_price": "Total Price:",
     "buy": "Buy",
@@ -37,8 +42,6 @@
     "chapter_not_available": "Chapter not available. This chapter will be available soon!",
     "add_to_basket_error": "Error. Failed to add the chapter to the basket.",
     "add_to_basket_failed": "Unable to add chapter to the basket. Please try again.",
-    "remove_error": "",
-    "remove_error": "",
     "toggle_like_error": "Error. Unable to toggle like for the chapter.",
     "login_like_required": "Login required. Please log in to like chapters.",
     "payment_cancelled": "Payment cancelled. Your transaction was cancelled. You can try again.",
@@ -49,6 +52,18 @@
     "error_message": "An error occurred while adding to cart. Please try again.",
     "remove": "Remove",
     "payment_methods": "Payment method available"
+  },
+  "chapter": {
+    "tome": "Tome",
+    "default_tome": "Tome 1",
+    "read": "Read",
+    "buy": "Buy",
+    "previous": "Previous",
+    "next": "Next",
+    "purchase": "Purchase"
+  },
+  "general": {
+    "close": "Close"
   },
   "otp": {
     "title": "Verify OTP",

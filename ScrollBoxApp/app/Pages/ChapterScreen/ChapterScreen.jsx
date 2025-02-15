@@ -26,6 +26,7 @@ import MessageModal from "../MessageModal/MessageModal";
 import i18n from "../locales/i18n";
 const { height } = Dimensions.get("window");
 import { useTranslation } from "react-i18next";
+import Loader from "../../../components/Loader";
 
 const DEFAULT_IMAGES = {
   thumbnail: require("./../../../assets/scrollboxImg/06.png"),
@@ -86,6 +87,16 @@ const ChapterScreen = () => {
   const [isMessageModalVisible, setIsMessageModalVisible] = useState(false);
   const [messageModalMessage, setMessageModalMessage] = useState("");
   const [messageModalType, setMessageModalType] = useState("info");
+  const currentIndex = chapters.findIndex(
+    (ch) => ch.id === selectedChapterForReading
+  );
+  const nextChapterId =
+    currentIndex !== -1 && currentIndex < chapters.length - 1
+      ? chapters[currentIndex + 1].id
+      : null;
+  const previousChapterId =
+    currentIndex > 0 ? chapters[currentIndex - 1].id : null;
+
   useEffect(() => {
     const fetchUserId = async () => {
       try {
@@ -214,8 +225,34 @@ const ChapterScreen = () => {
           selectedLanguage
         );
 
-        // Save to state
         setChapters(fetchedChapters);
+
+        // ✅ Restore the currently selected chapter in the new language
+        const storedChapterData = await AsyncStorage.getItem(
+          "selectedChapterForReading"
+        );
+        if (storedChapterData) {
+          const parsedData = JSON.parse(storedChapterData);
+
+          // If language changed, fetch the same chapter in the new language
+          if (parsedData.language !== selectedLanguage) {
+            const newChapter = fetchedChapters.find(
+              (ch) => ch.id === parsedData.id
+            );
+            if (newChapter) {
+              setSelectedChapterForReading(newChapter.id);
+
+              // ✅ Update stored chapter with the new language
+              await AsyncStorage.setItem(
+                "selectedChapterForReading",
+                JSON.stringify({
+                  id: newChapter.id,
+                  language: selectedLanguage,
+                })
+              );
+            }
+          }
+        }
       } catch (error) {
         console.error("Error updating chapters for language:", error);
       }
@@ -239,7 +276,11 @@ const ChapterScreen = () => {
     return defaultImage;
   };
   const navigateBack = () => {
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("Home");
+    }
   };
   const navigateToHomeScreen = () => {
     navigation.navigate("Home", {
@@ -407,27 +448,25 @@ const ChapterScreen = () => {
 
     calculateTotalAmount();
   }, [basket]);
-  const FloatingBasketButton = () => (
-    <TouchableOpacity
-      style={styles.floatingBasketButton}
-      onPress={() => {
-        if (cartItemsCount === 0) {
-          navigation.navigate("UserProfile", { screen: "LoginPage" });
-        } else {
+  const FloatingBasketButton = () => {
+    if (cartItemsCount === 0) return null; // Hide if cart is empty
+
+    return (
+      <TouchableOpacity
+        style={styles.floatingBasketButton}
+        onPress={() => {
           setIsPurchaseModalVisible(true);
-        }
-      }}
-    >
-      <View style={styles.basketButtonContent}>
-        <Text style={styles.basketButtonText}>Buy</Text>
-      </View>
-      {cartItemsCount > 0 && (
+        }}
+      >
+        <View style={styles.basketButtonContent}>
+          <Text style={styles.basketButtonText}>{t("cart.buy")}</Text>
+        </View>
         <View style={styles.basketNumberContainer}>
           <Text style={styles.basketNumber}>{cartItemsCount}</Text>
         </View>
-      )}
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const loadBasket = async () => {
     try {
@@ -711,7 +750,9 @@ const ChapterScreen = () => {
               onPress={() => removeFromBasket(item.id)}
               style={styles.purchaseModalRemoveButton}
             >
-              <Text style={styles.purchaseModalRemoveButtonText}>Remove</Text>
+              <Text style={styles.purchaseModalRemoveButtonText}>
+                {t("cart.remove")}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -733,7 +774,7 @@ const ChapterScreen = () => {
               <Text style={styles.purchaseModalCloseButtonText}>×</Text>
             </TouchableOpacity>
 
-            <Text style={styles.purchaseModalTitle}>Your Cart</Text>
+            <Text style={styles.purchaseModalTitle}>{t("cart.your_cart")}</Text>
 
             <FlatList
               data={basket}
@@ -741,14 +782,16 @@ const ChapterScreen = () => {
               keyExtractor={(item) => item.id}
               ListEmptyComponent={
                 <Text style={styles.purchaseModalEmptyBasketText}>
-                  Your basket is empty
+                  {t("cart.empty")}
                 </Text>
               }
               style={styles.purchaseModalBasketList}
             />
 
             <View style={styles.paymentMethodContainer}>
-              <Text style={styles.paymentMethodTitle}>Payment Method</Text>
+              <Text style={styles.paymentMethodTitle}>
+                {t("cart.payment_method")}
+              </Text>
 
               <View style={styles.paymentMethodImageContainer}>
                 <TouchableOpacity
@@ -800,7 +843,9 @@ const ChapterScreen = () => {
 
             <View style={styles.purchaseModalSummaryContainer}>
               <View style={styles.purchaseModalTotalRow}>
-                <Text style={styles.purchaseModalTotalText}>Total</Text>
+                <Text style={styles.purchaseModalTotalText}>
+                  {t("cart.total")}
+                </Text>
                 <Text style={styles.purchaseModalGrandTotalAmount}>
                   {totalAmount} {basket[0]?.currency || "XAF"}
                 </Text>
@@ -882,7 +927,9 @@ const ChapterScreen = () => {
               disabled={!selectedPaymentMethod || isLoading}
             >
               <Text style={styles.purchaseModalBuyButtonText}>
-                {isLoading ? "Processing..." : "Proceed to Checkout"}
+                {isLoading
+                  ? t("cart.processing")
+                  : t("cart.proceed_to_checkout")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -993,7 +1040,6 @@ const ChapterScreen = () => {
     setExpandedIndex(expandedIndex === index ? null : index);
   };
 
-  
   const toggleTextExpansion = (chapterId) => {
     const chapter = chapters.find((ch) => ch.id === chapterId);
     if (chapter && chapter.description.length > 100) {
@@ -1096,22 +1142,44 @@ const ChapterScreen = () => {
       await handleViewChapter(chapter.id); // Mark chapter as viewed
     };
 
-   const handleReadOrBuyClick = async () => {
-     if (isPurchased || isFirstChapter) {
-       // Check for token before allowing read
-       const token = await AsyncStorage.getItem("userToken");
-       if (!token) {
-         navigation.navigate("UserProfile", { screen: "LoginPage" });
-         return;
-       }
-       setSelectedChapterForReading(chapter.id);
-     } else {
-       const addedToCart = await handleAddToCart(chapter.id);
-       if (addedToCart) {
-         setIsPurchaseModalVisible(true);
-       }
-     }
-   };
+    const handleReadOrBuyClick = async () => {
+      try {
+        if (isPurchased || isFirstChapter) {
+          const token = await AsyncStorage.getItem("userToken");
+          if (!token) {
+            navigation.navigate("UserProfile", { screen: "LoginPage" });
+            return;
+          }
+
+          // Store chapter data
+          const selectedChapterData = {
+            id: chapter.id,
+            language: selectedLanguage,
+          };
+
+          await AsyncStorage.setItem(
+            "selectedChapterForReading",
+            JSON.stringify(selectedChapterData)
+          );
+
+          // Add a small delay before setting the chapter
+          setTimeout(() => {
+            setSelectedChapterForReading(chapter.id);
+          }, 100);
+        } else {
+          const addedToCart = await handleAddToCart(chapter.id);
+          if (addedToCart) {
+            setIsPurchaseModalVisible(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error opening chapter:", error);
+        Alert.alert(
+          "Error",
+          "There was an error opening the chapter. Please try again."
+        );
+      }
+    };
 
     const handleAddToBasket = async () => {
       if (!isPurchased && !isFirstChapter) {
@@ -1390,9 +1458,7 @@ const ChapterScreen = () => {
         <View style={styles.overlay} />
 
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ffffff" />
-          </View>
+          <Loader visible={loading} />
         ) : error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>
@@ -1404,7 +1470,7 @@ const ChapterScreen = () => {
               style={styles.retryButton}
               onPress={fetchChapters}
             >
-              <Text style={styles.retryButtonText}>Retry</Text>
+              <Text style={styles.retryButtonText}>{t("general.retry")}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -1444,7 +1510,9 @@ const ChapterScreen = () => {
                 backgroundColor: "#f0f0f0",
               }}
             >
-              <Text style={{ color: "red", fontSize: 16 }}>Close</Text>
+              <Text style={{ color: "red", fontSize: 16 }}>
+                {t("general.close")}
+              </Text>
             </TouchableOpacity>
             <WebView
               source={{ uri: paymentLink }}
@@ -1457,15 +1525,23 @@ const ChapterScreen = () => {
           </SafeAreaView>
         </Modal>
       )}
-      {!visibleCommentForChapter && <FloatingBasketButton />}
       {selectedChapterForReading && (
-        <ChapterReader
-          chapterId={selectedChapterForReading}
-          onClose={() => setSelectedChapterForReading(null)}
-          nextChapterId={"nextChapterIdHere"}
-          previousChapterId={"previousChapterIdHere"}
-          nextChapterPurchased={purchasedChapters.includes("nextChapterIdHere")}
-        />
+        <Modal
+          visible={selectedChapterForReading !== null}
+          animationType="fade"
+          onRequestClose={() => setSelectedChapterForReading(null)}
+        >
+          <ChapterReader
+            chapterId={selectedChapterForReading}
+            onClose={() => setSelectedChapterForReading(null)}
+            nextChapterId={nextChapterId ?? null}
+            previousChapterId={previousChapterId ?? null}
+            nextChapterPurchased={purchasedChapters.includes(
+              nextChapterId ?? ""
+            )}
+            language={selectedLanguage}
+          />
+        </Modal>
       )}
       <MessageModal
         visible={isMessageModalVisible}
@@ -1473,6 +1549,7 @@ const ChapterScreen = () => {
         type={messageModalType}
         onClose={closeMessageModal}
       />
+      {!visibleCommentForChapter && <FloatingBasketButton />}
     </SafeAreaView>
   );
 };

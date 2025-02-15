@@ -13,6 +13,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   BackHandler,
+  AppState,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -37,37 +38,47 @@ export default function OTPVerificationPage() {
   const [modalType, setModalType] = useState("error");
   const [email, setEmail] = useState("");
   const [isVerified, setIsVerified] = useState(false);
-  const [showExitConfirmation, setShowExitConfirmation] = useState(false);
+
+  // Track app state changes
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState) => {
+      if (nextAppState === "background") {
+        await AsyncStorage.setItem("otpState", JSON.stringify({ otp, email }));
+      } else if (nextAppState === "active") {
+        const savedState = await AsyncStorage.getItem("otpState");
+        if (savedState) {
+          const { otp: savedOtp, email: savedEmail } = JSON.parse(savedState);
+          setOtp(savedOtp);
+          setEmail(savedEmail);
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
+    return () => {
+      subscription.remove();
+    };
+  }, [otp, email]);
 
   // Prevent back button navigation
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
         if (!isVerified) {
-          setShowExitConfirmation(true);
+          navigation.navigate("Home");
           return true;
         }
         return false;
       };
 
       BackHandler.addEventListener("hardwareBackPress", onBackPress);
-
       return () =>
         BackHandler.removeEventListener("hardwareBackPress", onBackPress);
     }, [isVerified])
   );
-
-  // Prevent navigation state updates
-  useEffect(() => {
-    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
-      if (!isVerified && !showExitConfirmation) {
-        e.preventDefault();
-        setShowExitConfirmation(true);
-      }
-    });
-
-    return unsubscribe;
-  }, [navigation, isVerified, showExitConfirmation]);
 
   useEffect(() => {
     const retrieveEmail = async () => {
@@ -193,42 +204,13 @@ export default function OTPVerificationPage() {
     }
   };
 
-  const ExitConfirmationModal = () => (
-    <Modal
-      animationType="fade"
-      transparent={true}
-      visible={showExitConfirmation}
-      onRequestClose={() => setShowExitConfirmation(false)}
-    >
-      <View style={styles.confirmationModalContainer}>
-        <View style={styles.confirmationModalContent}>
-          <Text style={styles.confirmationTitle}>
-            {t("otp.exit_confirmation_title")}
-          </Text>
-          <Text style={styles.confirmationMessage}>
-            {t("otp.exit_confirmation_message")}
-          </Text>
-          <View style={styles.confirmationButtons}>
-            <TouchableOpacity
-              style={[styles.confirmationButton, styles.cancelButton]}
-              onPress={() => setShowExitConfirmation(false)}
-            >
-              <Text style={styles.confirmationButtonText}>{t("otp.stay")}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.confirmationButton, styles.exitButton]}
-              onPress={() => {
-                setShowExitConfirmation(false);
-                navigation.navigate("Home");
-              }}
-            >
-              <Text style={styles.confirmationButtonText}>{t("otp.exit")}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
+  const handleCloseModal = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("Home");
+    }
+  };
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -237,7 +219,7 @@ export default function OTPVerificationPage() {
           animationType="slide"
           transparent={true}
           visible={true}
-          onRequestClose={() => setShowExitConfirmation(true)}
+          onRequestClose={handleCloseModal}
         >
           <View style={styles.modalContainer}>
             <KeyboardAvoidingView
@@ -247,7 +229,7 @@ export default function OTPVerificationPage() {
               <View style={styles.modalContent}>
                 <TouchableOpacity
                   style={styles.closeButton}
-                  onPress={() => setShowExitConfirmation(true)}
+                  onPress={handleCloseModal}
                 >
                   <Image
                     source={require("./../../../assets/scrollboxImg/09.png")}
@@ -336,8 +318,6 @@ export default function OTPVerificationPage() {
             </KeyboardAvoidingView>
           </View>
         </Modal>
-
-        <ExitConfirmationModal />
 
         <MessageModal
           visible={isModalVisible}
@@ -455,52 +435,5 @@ const styles = StyleSheet.create({
   },
   resendLinkDisabled: {
     color: "#666",
-  },
-  confirmationModalContainer: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  confirmationModalContent: {
-    backgroundColor: "#1E1E1E",
-    borderRadius: 20,
-    padding: 20,
-    width: width * 0.8,
-    alignItems: "center",
-  },
-  confirmationTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  confirmationMessage: {
-    color: "#999",
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  confirmationButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-  },
-  confirmationButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 25,
-    marginHorizontal: 10,
-  },
-  cancelButton: {
-    backgroundColor: "#666",
-  },
-  exitButton: {
-    backgroundColor: "#FFA500",
-  },
-  confirmationButtonText: {
-    color: "#FFFFFF",
-    textAlign: "center",
-    fontWeight: "bold",
   },
 });
