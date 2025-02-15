@@ -482,11 +482,9 @@ const ChapterReader = ({
     try {
       console.log("Starting CBZ extraction...");
 
-      // Instead of chunking, read the entire file content as a Base64 string.
       const zipData = await FileSystem.readAsStringAsync(cbzUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      // Set progress after reading file
       setLoadingProgress(50);
 
       const zip = new JSZip();
@@ -518,29 +516,85 @@ const ChapterReader = ({
         `Found ${sortedFiles.length} valid images. Saving to disk...`
       );
 
-      for (let i = 0; i < sortedFiles.length; i++) {
-        const [filename, file] = sortedFiles[i];
-        if (!file.dir) {
-          const data = await file.async("uint8array");
-          const base64Data = Buffer.from(data).toString("base64");
-          const newFilename = `${extractDir}${String(i).padStart(
-            3,
-            "0"
-          )}_${filename.split("/").pop()}`;
-          await FileSystem.writeAsStringAsync(newFilename, base64Data, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          imageFiles.push(newFilename);
+      // Process each image independently using Promise.allSettled
+      const extractionResults = await Promise.allSettled(
+        sortedFiles.map(async ([filename, file], index) => {
+          if (!file.dir) {
+            try {
+              const data = await file.async("uint8array");
+              const base64Data = Buffer.from(data).toString("base64");
+              const newFilename = `${extractDir}${String(index).padStart(
+                3,
+                "0"
+              )}_${filename.split("/").pop()}`;
 
-          console.log(`Saved image: ${newFilename}`);
-          setLoadingProgress(
-            Math.min(90, 50 + Math.floor((i / sortedFiles.length) * 40))
-          );
+              await FileSystem.writeAsStringAsync(newFilename, base64Data, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+
+              console.log(`Saved image: ${newFilename}`);
+              setLoadingProgress(
+                Math.min(90, 50 + Math.floor((index / sortedFiles.length) * 40))
+              );
+
+              return { success: true, uri: `file://${newFilename}`, index };
+            } catch (error) {
+              console.error(`Failed to extract image ${index}:`, error);
+              return { success: false, index, error: error.message };
+            }
+          }
+        })
+      );
+
+      // Process results and maintain original array structure
+      const pages = new Array(sortedFiles.length);
+      const failedImages = new Set();
+
+      extractionResults.forEach((result) => {
+        if (result.status === "fulfilled" && result.value?.success) {
+          pages[result.value.index] = { uri: result.value.uri };
+        } else if (result.status === "fulfilled") {
+          pages[result.value.index] = { uri: "" };
+          failedImages.add(result.value.index);
         }
-      }
+      });
+
+      // Set up automatic retry for failed images
+      failedImages.forEach((index) => {
+        const retryImage = async () => {
+          try {
+            const [filename, file] = sortedFiles[index];
+            const data = await file.async("uint8array");
+            const base64Data = Buffer.from(data).toString("base64");
+            const newFilename = `${extractDir}${String(index).padStart(
+              3,
+              "0"
+            )}_${filename.split("/").pop()}`;
+
+            await FileSystem.writeAsStringAsync(newFilename, base64Data, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+
+            pages[index] = { uri: `file://${newFilename}` };
+            failedImages.delete(index);
+
+            // Update the pages state
+            setPages([...pages]);
+            setFailedImages(new Set(failedImages));
+
+            console.log(`Successfully retried image ${index}`);
+          } catch (error) {
+            console.error(`Retry failed for image ${index}:`, error);
+            setTimeout(retryImage, 5000); // Retry again after 5 seconds
+          }
+        };
+
+        // Start the retry process
+        setTimeout(retryImage, 5000);
+      });
 
       console.log("Image extraction completed successfully.");
-      return imageFiles.map((file) => ({ uri: `file://${file}` }));
+      return pages;
     } catch (error) {
       console.error("Image extraction failed:", error);
       throw new Error(`Image extraction failed: ${error.message}`);
@@ -760,9 +814,11 @@ const ChapterReader = ({
       // Save extracted images metadata to AsyncStorage
       await saveExtractedImagesMetadata(chapterId, language, extractedPages);
 
-      // Verify extraction
-      setLoadingStage("Verifying files...");
-      setLoadingProgress(80);
+      setLoadingStage("Finalizing...");
+      setLoadingProgress(90);
+      setPages(extractedPages);
+      setLastLanguage(language);
+
       const verificationResults = await Promise.all(
         extractedPages.map(async (page) => {
           const filePath = page.uri.replace("file://", "");
@@ -949,12 +1005,6 @@ const ChapterReader = ({
     }
   };
 
-  const handlePreviousChapter = () => {
-    if (previousChapterId) {
-      navigation.replace("ChapterScreen", { chapterId: previousChapterId });
-    }
-  };
-
   const SecurityOverlay = () => (
     <View
       style={[
@@ -1059,16 +1109,7 @@ const ChapterReader = ({
                 </View>
               </View>
 
-              <View style={styles.bottomControls}>
-                {previousChapterId && (
-                  <TouchableOpacity
-                    style={[styles.navButton, styles.leftNav]}
-                    onPress={handlePreviousChapter}
-                  >
-                    <Text style={styles.navButtonText}>← Previous</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              <View style={styles.bottomControls}></View>
             </>
           )}
         </SafeAreaView>
