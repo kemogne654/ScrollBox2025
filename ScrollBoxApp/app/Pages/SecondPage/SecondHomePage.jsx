@@ -22,6 +22,18 @@ const SecondHomePage = () => {
   const voirMapOpacity = useRef(new Animated.Value(0)).current;
   const [showImage, setShowImage] = useState(false);
 
+  const handleClose = async () => {
+    if (videoRef.current) {
+      await videoRef.current.stopAsync();
+      setHasPlayedOnce(true);
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("Home");
+    }
+  };
+
   useEffect(() => {
     const lockOrientation = async () => {
       await ScreenOrientation.lockAsync(
@@ -135,6 +147,9 @@ const SecondHomePage = () => {
         isLooping={false}
         shouldPlay={false}
       />
+      <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+        <Text style={styles.closeButtonText}>✕</Text>
+      </TouchableOpacity>
       <Animated.View
         style={[styles.buttonContainer, { opacity: voirPersonnagesOpacity }]}
       >
@@ -188,6 +203,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
+  },
+  closeButton: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1,
+  },
+  closeButtonText: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "bold",
   },
   buttonContainer: {
     position: "absolute",
