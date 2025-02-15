@@ -26,7 +26,7 @@ import * as MediaLibrary from "expo-media-library";
 import { usePreventScreenCapture } from "expo-screen-capture";
 import AnimatedDownloadModal from "./AnimatedDownloadModal";
 
-const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_EXPIRY = 48 * 60 * 60 * 1000; // 48 hours
 const MIN_SCALE = 1;
 const MAX_SCALE = 3;
 
@@ -478,122 +478,90 @@ const ChapterReader = ({
     }
   };
 
+  // Updated: One-at-a-Time Extraction
   const extractImagesFromCBZ = async (cbzUri, extractDir) => {
     try {
-      console.log("Starting CBZ extraction...");
+      console.log("Starting CBZ extraction (one file at a time)...");
 
+      // 1) Read the entire file as base64 (WARNING: still uses memory if file is large)
       const zipData = await FileSystem.readAsStringAsync(cbzUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
       setLoadingProgress(50);
 
+      // 2) Create a new JSZip instance
       const zip = new JSZip();
       await zip.loadAsync(zipData, { base64: true });
 
-      const imageFiles = [];
       const validExtensions = /\.(jpg|jpeg|png|webp|gif)$/i;
 
-      const sortedFiles = Object.entries(zip.files)
-        .filter(
-          ([filename]) =>
-            !filename.startsWith("__MACOSX") &&
-            !filename.startsWith(".") &&
-            validExtensions.test(filename.toLowerCase())
-        )
-        .sort((a, b) => {
-          const getNumber = (filename) => {
-            const match = filename.match(/\d+/);
-            return match ? parseInt(match[0]) : Infinity;
-          };
-          return getNumber(a[0]) - getNumber(b[0]);
-        });
-
-      if (sortedFiles.length === 0) {
-        throw new Error("No valid images found in CBZ file");
-      }
-
-      console.log(
-        `Found ${sortedFiles.length} valid images. Saving to disk...`
-      );
-
-      // Process each image independently using Promise.allSettled
-      const extractionResults = await Promise.allSettled(
-        sortedFiles.map(async ([filename, file], index) => {
-          if (!file.dir) {
-            try {
-              const data = await file.async("uint8array");
-              const base64Data = Buffer.from(data).toString("base64");
-              const newFilename = `${extractDir}${String(index).padStart(
-                3,
-                "0"
-              )}_${filename.split("/").pop()}`;
-
-              await FileSystem.writeAsStringAsync(newFilename, base64Data, {
-                encoding: FileSystem.EncodingType.Base64,
-              });
-
-              console.log(`Saved image: ${newFilename}`);
-              setLoadingProgress(
-                Math.min(90, 50 + Math.floor((index / sortedFiles.length) * 40))
-              );
-
-              return { success: true, uri: `file://${newFilename}`, index };
-            } catch (error) {
-              console.error(`Failed to extract image ${index}:`, error);
-              return { success: false, index, error: error.message };
-            }
-          }
-        })
-      );
-
-      // Process results and maintain original array structure
-      const pages = new Array(sortedFiles.length);
-      const failedImages = new Set();
-
-      extractionResults.forEach((result) => {
-        if (result.status === "fulfilled" && result.value?.success) {
-          pages[result.value.index] = { uri: result.value.uri };
-        } else if (result.status === "fulfilled") {
-          pages[result.value.index] = { uri: "" };
-          failedImages.add(result.value.index);
+      // 3) Gather and sort valid image files
+      const entries = [];
+      zip.forEach((relativePath, file) => {
+        if (!file.dir && validExtensions.test(file.name)) {
+          entries.push(file);
         }
       });
 
-      // Set up automatic retry for failed images
-      failedImages.forEach((index) => {
-        const retryImage = async () => {
-          try {
-            const [filename, file] = sortedFiles[index];
-            const data = await file.async("uint8array");
-            const base64Data = Buffer.from(data).toString("base64");
-            const newFilename = `${extractDir}${String(index).padStart(
-              3,
-              "0"
-            )}_${filename.split("/").pop()}`;
-
-            await FileSystem.writeAsStringAsync(newFilename, base64Data, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-
-            pages[index] = { uri: `file://${newFilename}` };
-            failedImages.delete(index);
-
-            // Update the pages state
-            setPages([...pages]);
-            setFailedImages(new Set(failedImages));
-
-            console.log(`Successfully retried image ${index}`);
-          } catch (error) {
-            console.error(`Retry failed for image ${index}:`, error);
-            setTimeout(retryImage, 5000); // Retry again after 5 seconds
-          }
+      // Sort by numeric portion of filename
+      entries.sort((a, b) => {
+        const getNumber = (str) => {
+          const match = str.name.match(/\d+/);
+          return match ? parseInt(match[0]) : Infinity;
         };
-
-        // Start the retry process
-        setTimeout(retryImage, 5000);
+        return getNumber(a) - getNumber(b);
       });
 
-      console.log("Image extraction completed successfully.");
+      if (entries.length === 0) {
+        throw new Error("No valid images found in CBZ file");
+      }
+      console.log(`Found ${entries.length} valid images. Extracting...`);
+
+      // 4) Extract images sequentially
+      const pages = [];
+      for (let i = 0; i < entries.length; i++) {
+        const file = entries[i];
+        try {
+          // 4a) Read this file’s data as a Uint8Array
+          const data = await file.async("uint8array");
+
+          // 4b) Convert to base64
+          const base64Data = Buffer.from(data).toString("base64");
+
+          // 4c) Construct a new filename with zero-padded index
+          const newFilename = `${extractDir}${String(i).padStart(
+            3,
+            "0"
+          )}_${file.name.split("/").pop()}`;
+
+          // 4d) Write the file to disk
+          await FileSystem.writeAsStringAsync(newFilename, base64Data, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          // 4e) Add to pages array
+          pages.push({ uri: `file://${newFilename}` });
+
+          // Optionally update your loading progress
+          const progressBase = 50; // after reading the zip
+          const progressMax = 90; // final extraction stage
+          const fraction = i / entries.length;
+          setLoadingProgress(
+            Math.min(
+              progressMax,
+              progressBase + Math.floor(fraction * (progressMax - progressBase))
+            )
+          );
+
+          console.log(`Extracted image ${i}: ${newFilename}`);
+        } catch (err) {
+          // If an image fails, push a placeholder or skip it
+          pages.push({ uri: "" });
+          console.error(`Failed to extract image ${i}:`, err.message);
+        }
+      }
+
+      console.log("Sequential extraction complete.");
       return pages;
     } catch (error) {
       console.error("Image extraction failed:", error);
