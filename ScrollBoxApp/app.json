@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ScrollBox",
+    "name": "ScrolBox",
     "slug": "ScrollBoxApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -53,10 +53,7 @@
               "pathPrefix": "/reset-password"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         },
         {
           "action": "VIEW",
@@ -66,10 +63,7 @@
               "host": "reset-password"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         },
         {
           "action": "VIEW",
@@ -80,10 +74,7 @@
               "pathPrefix": "/reset-password"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         },
         {
           "action": "VIEW",
@@ -93,10 +84,7 @@
               "host": "reset-password"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
