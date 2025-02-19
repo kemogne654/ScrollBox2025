@@ -2,17 +2,17 @@ import React, { useEffect, useState } from "react";
 import {
   View,
   StyleSheet,
-  Dimensions,
   Text,
   StatusBar,
   TouchableOpacity,
   Animated,
   Image,
-  I18nManager,
 } from "react-native";
 import { Video, Audio } from "expo-av";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const videosByLanguage = {
   fr: [
@@ -94,25 +94,19 @@ const videosByLanguage = {
 };
 
 const Map = () => {
-  const [language, setLanguage] = useState("fr");
+  const { i18n } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [videoAnim] = useState(new Animated.Value(0));
   const [isMuted, setIsMuted] = useState(false);
   const [backgroundSound, setBackgroundSound] = useState();
   const navigation = useNavigation();
 
-  // Set up landscape orientation on mount
   useEffect(() => {
     const setupScreen = async () => {
       try {
         await ScreenOrientation.lockAsync(
           ScreenOrientation.OrientationLock.LANDSCAPE
         );
-        const detectLanguage = () => {
-          const locale = I18nManager.localeIdentifier || "fr";
-          setLanguage(locale.startsWith("en") ? "en" : "fr");
-        };
-        detectLanguage();
         await loadSound();
       } catch (error) {
         console.warn("Screen setup error:", error);
@@ -121,7 +115,6 @@ const Map = () => {
 
     setupScreen();
 
-    // Cleanup on unmount
     return () => {
       ScreenOrientation.unlockAsync();
       if (backgroundSound) {
@@ -160,9 +153,9 @@ const Map = () => {
       duration: 500,
       useNativeDriver: true,
     }).start();
-  }, [currentIndex, language]);
+  }, [currentIndex]);
 
-  const videos = videosByLanguage[language];
+  const videos = videosByLanguage[i18n.language] || videosByLanguage.en;
 
   const handlePrevious = () => {
     videoAnim.setValue(0);
