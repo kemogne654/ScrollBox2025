@@ -11,11 +11,13 @@ import { Video } from "expo-av";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { StatusBar } from "expo-status-bar";
 import { useTranslation } from "react-i18next";
+import Loader from "../../../components/Loader";
 
 const SecondHomePage = ({ navigation }) => {
   const { t, i18n } = useTranslation();
   const videoRef = useRef(null);
   const [showChapterButton, setShowChapterButton] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateYAnim = useRef(new Animated.Value(20)).current;
@@ -41,7 +43,10 @@ const SecondHomePage = ({ navigation }) => {
 
     return () => {
       const unlockOrientation = async () => {
-        await ScreenOrientation.unlockAsync();
+        // Set orientation back to portrait when component unmounts
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.PORTRAIT
+        );
       };
       unlockOrientation();
     };
@@ -51,25 +56,47 @@ const SecondHomePage = ({ navigation }) => {
   useEffect(() => {
     if (videoRef.current) {
       const playVideo = async () => {
+        setLoading(true);
         await videoRef.current.unloadAsync();
-        await videoRef.current.loadAsync(getVideoSource());
+        await videoRef.current.loadAsync(getVideoSource(), {}, false);
         await videoRef.current.playAsync();
       };
       playVideo();
     }
   }, [i18n.language]);
 
-  const handleClose = () => {
-    if (navigation) {
-      navigation.goBack();
+  const stopVideoAndNavigate = async (destination) => {
+    if (videoRef.current) {
+      await videoRef.current.stopAsync();
+    }
+
+    // Set orientation back to portrait before navigating
+    await ScreenOrientation.lockAsync(
+      ScreenOrientation.OrientationLock.PORTRAIT
+    );
+
+    if (destination === "back") {
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate("Home");
+      }
+    } else {
+      navigation.navigate(destination);
     }
   };
 
   const handleReadChapters = () => {
-    console.log("Read chapters clicked");
+    stopVideoAndNavigate("ChapterScreen");
   };
 
   const handlePlaybackUpdate = (status) => {
+    // Hide loader when video starts playing
+    if (status.isLoaded && status.isPlaying && loading) {
+      setLoading(false);
+    }
+
+    // Show the chapter button at 91 seconds
     if (status.positionMillis >= 91000 && !showChapterButton) {
       setShowChapterButton(true);
 
@@ -86,6 +113,11 @@ const SecondHomePage = ({ navigation }) => {
         }),
       ]).start();
     }
+
+    // Navigate to Home when video finishes
+    if (status.didJustFinish) {
+      stopVideoAndNavigate("Home");
+    }
   };
 
   return (
@@ -101,9 +133,16 @@ const SecondHomePage = ({ navigation }) => {
         isLooping={false}
         useNativeControls={false}
         onPlaybackStatusUpdate={handlePlaybackUpdate}
+        onError={(error) => {
+          console.error("Video loading error:", error);
+          setLoading(false);
+        }}
       />
 
-      <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={() => stopVideoAndNavigate("back")}
+      >
         <Image
           source={require("./../../../assets/scrollboxImg/09.png")}
           style={styles.closeIcon}
@@ -126,6 +165,8 @@ const SecondHomePage = ({ navigation }) => {
           <Text style={styles.chapterText}>{t("readChapters")}</Text>
         </Animated.View>
       )}
+
+      <Loader visible={loading} />
     </View>
   );
 };

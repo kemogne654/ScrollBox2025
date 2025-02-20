@@ -282,15 +282,6 @@ const ChapterScreen = () => {
       navigation.navigate("Home");
     }
   };
-  const navigateToHomeScreen = () => {
-    navigation.navigate("Home", {
-      screen: "HomeScreen",
-      params: { fromChapterScreen: true },
-    });
-  };
-  const handleBackPress = () => {
-    setExpandedIndex(null);
-  };
   useEffect(() => {
     fetchTomes();
   }, []);
@@ -335,23 +326,6 @@ const ChapterScreen = () => {
           : chapter
       )
     );
-  };
-  const updateChapterCommentCount = (chapterId, newCount) => {
-    setChapters((prevChapters) =>
-      prevChapters.map((chapter) => {
-        if (chapter.id === chapterId) {
-          return {
-            ...chapter,
-            commentNumber: newCount,
-          };
-        }
-        return chapter;
-      })
-    );
-    setChapterCommentCounts((prev) => ({
-      ...prev,
-      [chapterId]: newCount,
-    }));
   };
   const fetchTomes = async () => {
     if (!selectedComic) {
@@ -421,15 +395,6 @@ const ChapterScreen = () => {
       setError("Failed to load chapters. Please try again.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleLanguageChange = async (language) => {
-    try {
-      setSelectedLanguage(language);
-      await i18n.changeLanguage(language); // Update language for translations
-    } catch (error) {
-      console.error("Error changing language:", error);
     }
   };
 
@@ -543,16 +508,6 @@ const ChapterScreen = () => {
       setIsPurchaseModalVisible(true);
       showMessage(t("cart.payment_cancelled"), "error");
     }
-  };
-  const saveBasket = async (newBasket) => {
-    try {
-      await AsyncStorage.setItem("basket", JSON.stringify(newBasket));
-    } catch (error) {
-      console.error("Error saving basket:", error);
-    }
-  };
-  const navigateToPurchase = () => {
-    navigation.navigate("PurchaseModal", { basket });
   };
   useEffect(() => {
     const loadPersistedState = async () => {

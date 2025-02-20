@@ -103,37 +103,6 @@ const ChapterReader = ({
 
     setupScreenCaptureProtection();
   }, []);
-  const validateCache = async (cacheKey, extractDir) => {
-    try {
-      const cachedData = await AsyncStorage.getItem(cacheKey);
-      if (!cachedData) return false;
-
-      const { pages, timestamp, cachedLanguage } = JSON.parse(cachedData);
-
-      // Check if cache is expired or language mismatch
-      if (
-        Date.now() - timestamp >= CACHE_EXPIRY ||
-        cachedLanguage !== language
-      ) {
-        return false;
-      }
-
-      // Verify all cached files exist
-      for (const page of pages) {
-        const filePath = page.uri.replace("file://", "");
-        const fileInfo = await FileSystem.getInfoAsync(filePath);
-        if (!fileInfo.exists) {
-          console.log(`Cache validation failed: Missing file ${filePath}`);
-          return false;
-        }
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Cache validation error:", error);
-      return false;
-    }
-  };
   useEffect(() => {
     const checkAuthAndLanguage = async () => {
       try {
@@ -494,87 +463,6 @@ const ChapterReader = ({
       }
     }
   };
-
-  const ensureDirectoryExists = async (dirPath) => {
-    try {
-      console.log(`Checking directory: ${dirPath}`);
-      const dirInfo = await FileSystem.getInfoAsync(dirPath);
-
-      if (!dirInfo.exists) {
-        console.log(`Directory doesn't exist, creating: ${dirPath}`);
-        await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
-
-        const verifyInfo = await FileSystem.getInfoAsync(dirPath);
-        if (!verifyInfo.exists) {
-          throw new Error(`Failed to create directory: ${dirPath}`);
-        }
-        console.log(`Successfully created directory: ${dirPath}`);
-      } else {
-        console.log(`Directory already exists: ${dirPath}`);
-      }
-
-      const testFile = `${dirPath}/test.txt`;
-      await FileSystem.writeAsStringAsync(testFile, "test");
-      await FileSystem.deleteAsync(testFile, { idempotent: true });
-      console.log(`Directory is writable: ${dirPath}`);
-    } catch (error) {
-      console.error(`Directory setup error: ${error.message}`);
-      throw new Error(`Failed to setup directory: ${error.message}`);
-    }
-  };
-  const checkExtractedImagesInAsyncStorage = async (chapterId, language) => {
-    try {
-      const userId = await AsyncStorage.getItem("userId");
-      if (!userId) throw new Error("User ID not found");
-
-      const cacheKey = `extracted_images_${chapterId}_${language}_${userId}`;
-      const cachedData = await AsyncStorage.getItem(cacheKey);
-
-      if (!cachedData) {
-        console.log("No extracted images metadata found in AsyncStorage");
-        return false;
-      }
-
-      const {
-        pages,
-        timestamp,
-        userId: cachedUserId,
-        language: cachedLanguage,
-      } = JSON.parse(cachedData);
-
-      // Check if the cached data matches the current user and language
-      if (cachedUserId !== userId || cachedLanguage !== language) {
-        console.log("User ID or language mismatch, invalidating cache");
-        return false;
-      }
-
-      // Check if the cache is expired (e.g., 24 hours)
-      if (Date.now() - timestamp >= CACHE_EXPIRY) {
-        console.log("Cache expired, invalidating extracted images metadata");
-        return false;
-      }
-
-      // Verify that the files still exist in the file system
-      const filesExist = await Promise.all(
-        pages.map(async (uri) => {
-          const filePath = uri.replace("file://", "");
-          const fileInfo = await FileSystem.getInfoAsync(filePath);
-          return fileInfo.exists;
-        })
-      );
-
-      if (!filesExist.every(Boolean)) {
-        console.log("Some extracted images are missing from the file system");
-        return false;
-      }
-
-      console.log("Extracted images metadata is valid");
-      return true;
-    } catch (error) {
-      console.error("Error checking extracted images metadata:", error);
-      return false;
-    }
-  };
   const loadExtractedImagesFromAsyncStorage = async (chapterId, language) => {
     try {
       const userId = await AsyncStorage.getItem("userId");
@@ -836,34 +724,6 @@ const ChapterReader = ({
     }
   };
 
-  // Helper function to check if extracted images exist
-  const checkExtractedImagesExist = async (extractDir) => {
-    try {
-      const dirInfo = await FileSystem.getInfoAsync(extractDir);
-      if (!dirInfo.exists) return false;
-
-      const files = await FileSystem.readDirectoryAsync(extractDir);
-      return files.length > 0;
-    } catch (error) {
-      console.error("Error checking extracted images:", error);
-      return false;
-    }
-  };
-
-  // Helper function to get existing extracted images
-  const getExistingExtractedImages = async (extractDir) => {
-    try {
-      const files = await FileSystem.readDirectoryAsync(extractDir);
-      const sortedFiles = files.sort((a, b) => a.localeCompare(b));
-      return sortedFiles.map((file) => ({
-        uri: `file://${extractDir}${file}`,
-      }));
-    } catch (error) {
-      console.error("Error getting existing images:", error);
-      return [];
-    }
-  };
-
   const saveExtractedImagesMetadata = async (chapterId, language, pages) => {
     try {
       const userId = await AsyncStorage.getItem("userId");
@@ -895,12 +755,6 @@ const ChapterReader = ({
       console.error("Error clearing user cache:", error);
     }
   };
-
-  const handleLogout = async () => {
-    await clearUserCache();
-    // ... rest of logout logic
-  };
-
   // Update language change effect
 
   useEffect(() => {
