@@ -14,6 +14,18 @@
     "gallery": "Galerie",
     "dico": "Dico"
   },
+  "loading": {
+    "preparingExperience": "Préparation de votre expérience de lecture...",
+    "almostReady": "Votre chapitre est presque prêt...",
+    "makingAdjustments": "Finalisation des ajustements...",
+    "gettingReady": "Préparation de votre chapitre...",
+    "almostThere": "Presque terminé..."
+  },
+  "errors": {
+    "authRequired": "Authentification requise",
+    "unableToPrepareLong": "Impossible de préparer le chapitre",
+    "loadFailed": "Échec du chargement du chapitre:"
+  },
   "forgot_password": {
     "title": "Mot de passe oublié",
     "subtitle": "Veuillez saisir votre adresse e-mail",

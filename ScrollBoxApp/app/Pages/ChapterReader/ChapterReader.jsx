@@ -38,6 +38,10 @@ const ChapterReader = ({
   nextChapterPurchased,
   language,
 }) => {
+  const getLanguageSpecificPath = async (lang) => {
+    const userPath = await getUserSpecificPath();
+    return `${userPath}${lang}/`;
+  };
   usePreventScreenCapture();
 
   const navigation = useNavigation();
@@ -264,28 +268,28 @@ const ChapterReader = ({
     }
   };
 
-  const getCBZPath = async (chapterId, language) => {
-    const userPath = await getUserSpecificPath();
-    return `${userPath}cbz_files/${chapterId}_${language}.cbz`;
+  const getCBZPath = async (chapterId, lang) => {
+    const langPath = await getLanguageSpecificPath(lang);
+    return `${langPath}cbz_files/${chapterId}.cbz`;
   };
 
-  const getExtractPath = async (chapterId, language) => {
-    const userPath = await getUserSpecificPath();
-    return `${userPath}extracted/${chapterId}_${language}/`;
+  const getExtractPath = async (chapterId, lang) => {
+    const langPath = await getLanguageSpecificPath(lang);
+    return `${langPath}extracted/${chapterId}/`;
   };
 
-  const ensureUserDirectories = async () => {
+  const ensureLanguageDirectories = async (lang) => {
     try {
-      const userPath = await getUserSpecificPath();
-      const cbzDir = `${userPath}cbz_files/`;
-      const extractedDir = `${userPath}extracted/`;
+      const langPath = await getLanguageSpecificPath(lang);
+      const cbzDir = `${langPath}cbz_files/`;
+      const extractedDir = `${langPath}extracted/`;
 
       await FileSystem.makeDirectoryAsync(cbzDir, { intermediates: true });
       await FileSystem.makeDirectoryAsync(extractedDir, {
         intermediates: true,
       });
     } catch (error) {
-      console.error("Error creating user directories:", error);
+      console.error(`Error creating language directories for ${lang}:`, error);
       throw error;
     }
   };
@@ -595,7 +599,7 @@ const ChapterReader = ({
       setLoading(true);
       setError(null);
       setLoadingProgress(0);
-      setLoadingStage("Getting things ready...");
+      setLoadingStage("Preparing your reading experience...");
       setFailedImages(new Set());
       setImageLoadingStates({});
 
@@ -605,24 +609,94 @@ const ChapterReader = ({
       }
       setLastToken(token);
 
-      await ensureUserDirectories();
+      // Ensure directories exist for both languages
+      await Promise.all([
+        ensureLanguageDirectories("en"),
+        ensureLanguageDirectories("fr"),
+      ]);
 
       const cbzPath = await getCBZPath(chapterId, language);
       const extractDir = await getExtractPath(chapterId, language);
 
-      const extractedImagesValid = await checkExtractedImagesInAsyncStorage(
-        chapterId,
-        language
-      );
+      // Check if current language content exists and is valid
+      const currentLanguageKey = `${chapterId}_${language}_content`;
+      const storedLanguage = await AsyncStorage.getItem(currentLanguageKey);
 
-      if (extractedImagesValid) {
-        setLoadingStage("Almost there...");
+      // If language has changed or content doesn't exist for current language
+      if (!storedLanguage || storedLanguage !== language) {
+        // Clear previous language cache if exists
+        if (storedLanguage) {
+          const prevExtractDir = await getExtractPath(
+            chapterId,
+            storedLanguage
+          );
+          await FileSystem.deleteAsync(prevExtractDir, { idempotent: true });
+        }
+
+        setLoadingStage("Your chapter is almost ready...");
+        // Download new content for current language
+        const chapterData = await fetchWithRetry(async () => {
+          const response = await ApiService.getChapterContent(
+            chapterId,
+            language,
+            token
+          );
+          if (!response?.signedUrl) {
+            throw new Error("Unable to prepare chapter");
+          }
+          return response;
+        });
+
+        await fetchWithRetry(async () => {
+          const downloadResumable = FileSystem.createDownloadResumable(
+            chapterData.signedUrl,
+            cbzPath,
+            {
+              sessionType: FileSystem.FileSystemSessionType.BACKGROUND,
+              cache: true,
+            },
+            (downloadProgress) => {
+              const progress =
+                (downloadProgress.totalBytesWritten /
+                  downloadProgress.totalBytesExpectedToWrite) *
+                100;
+              setLoadingProgress(Math.round(progress));
+            }
+          );
+
+          const result = await downloadResumable.downloadAsync();
+          if (!result?.uri) {
+            throw new Error("Unable to prepare chapter");
+          }
+        });
+
+        setLoadingStage("Making final adjustments...");
+        await validateCBZFile(cbzPath);
+
+        await FileSystem.deleteAsync(extractDir, { idempotent: true });
+        await FileSystem.makeDirectoryAsync(extractDir, {
+          intermediates: true,
+        });
+
+        const extractedPages = await extractImagesFromCBZ(cbzPath, extractDir);
+
+        if (extractedPages.length === 0) {
+          throw new Error("Unable to prepare chapter");
+        }
+
+        // Save metadata for new language
+        await saveExtractedImagesMetadata(chapterId, language, extractedPages);
+        await AsyncStorage.setItem(currentLanguageKey, language);
+
+        setPages(extractedPages);
+        setLastLanguage(language);
+      } else {
+        // Load existing content for current language
+        setLoadingStage("Getting your chapter ready...");
         const extractedPages = await loadExtractedImagesFromAsyncStorage(
           chapterId,
           language
         );
-
-        await cleanupFailedExtractions(extractDir);
 
         const validatedPages = await Promise.all(
           extractedPages.map(async (page) => {
@@ -634,103 +708,19 @@ const ChapterReader = ({
 
         const filteredPages = validatedPages.filter((page) => page !== null);
 
-        if (filteredPages.length < extractedPages.length * 0.8) {
-          console.log("Too many invalid pages, forcing fresh download");
-          throw new Error("Cache validation failed");
+        if (filteredPages.length > 0) {
+          setLoadingStage("Almost there...");
+          setPages(filteredPages);
+          setLastLanguage(language);
+        } else {
+          // If cached content is invalid, clear and reload
+          await AsyncStorage.removeItem(currentLanguageKey);
+          await loadChapter(); // Retry loading with fresh content
         }
-
-        setPages(filteredPages);
-        setLastLanguage(language);
-        setLoading(false);
-        return;
       }
-
-      setLoadingStage("Preparing your chapter...");
-      const chapterData = await fetchWithRetry(async () => {
-        const response = await ApiService.getChapterContent(
-          chapterId,
-          language,
-          token
-        );
-        if (!response?.signedUrl) {
-          throw new Error("Invalid chapter data received");
-        }
-        return response;
-      }, 3);
-
-      await fetchWithRetry(async () => {
-        const downloadResumable = FileSystem.createDownloadResumable(
-          chapterData.signedUrl,
-          cbzPath,
-          {
-            sessionType: FileSystem.FileSystemSessionType.BACKGROUND,
-            cache: true,
-          },
-          (downloadProgress) => {
-            const progress =
-              downloadProgress.totalBytesWritten /
-              downloadProgress.totalBytesExpectedToWrite;
-            setLoadingProgress(Math.round(progress * 100));
-          }
-        );
-
-        const result = await downloadResumable.downloadAsync();
-        if (!result || !result.uri) {
-          throw new Error("Download failed");
-        }
-
-        const fileInfo = await FileSystem.getInfoAsync(cbzPath);
-        if (!fileInfo.exists || fileInfo.size === 0) {
-          throw new Error("Downloaded file is empty");
-        }
-
-        return result;
-      }, 3);
-
-      setLoadingStage("Just a moment...");
-      await validateCBZFile(cbzPath);
-
-      await FileSystem.deleteAsync(extractDir, { idempotent: true });
-      await FileSystem.makeDirectoryAsync(extractDir, { intermediates: true });
-
-      setLoadingStage("Making final adjustments...");
-      const extractedPages = await extractImagesFromCBZ(cbzPath, extractDir);
-
-      if (!extractedPages || extractedPages.length === 0) {
-        throw new Error("No valid images found in chapter");
-      }
-
-      await cleanupFailedExtractions(extractDir);
-
-      const finalPages = await Promise.all(
-        extractedPages.map(async (page) => {
-          const filePath = page.uri.replace("file://", "");
-          const isValid = await validateExtractedImage(filePath);
-          return isValid ? page : null;
-        })
-      );
-
-      const validPages = finalPages.filter((page) => page !== null);
-
-      if (validPages.length === 0) {
-        throw new Error("No valid images after extraction");
-      }
-
-      await saveExtractedImagesMetadata(chapterId, language, validPages);
-
-      setLoadingStage("Ready in a few seconds...");
-      setPages(validPages);
-      setLastLanguage(language);
     } catch (error) {
       console.error("Chapter load failed:", error);
-      handleError(new Error(`Failed to load chapter: ${error.message}`));
-
-      try {
-        const extractDir = await getExtractPath(chapterId, language);
-        await FileSystem.deleteAsync(extractDir, { idempotent: true });
-      } catch (cleanupError) {
-        console.error("Cleanup error:", cleanupError);
-      }
+      handleError(error);
     } finally {
       setLoading(false);
       setLoadingStage("");
@@ -771,44 +761,44 @@ const ChapterReader = ({
         throw new Error("No valid images found in CBZ file");
       }
 
-      const BATCH_SIZE = 3;
-      const pages = new Array(entries.length).fill({ uri: "" });
+      const extractedPages = [];
 
-      for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-        const batch = entries.slice(i, i + BATCH_SIZE);
-        const batchPromises = batch.map(async (file, batchIndex) => {
-          const index = i + batchIndex;
-          try {
-            const data = await file.async("uint8array");
-            const base64Data = Buffer.from(data).toString("base64");
+      // Extract images sequentially to prevent failures from affecting other images
+      for (let i = 0; i < entries.length; i++) {
+        const file = entries[i];
+        try {
+          const data = await file.async("uint8array");
+          const base64Data = Buffer.from(data).toString("base64");
 
-            const newFilename = `${extractDir}${String(index).padStart(
-              3,
-              "0"
-            )}_${file.name.split("/").pop()}`;
+          const newFilename = `${extractDir}${String(i).padStart(
+            3,
+            "0"
+          )}_${file.name.split("/").pop()}`;
 
-            await FileSystem.writeAsStringAsync(newFilename, base64Data, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
+          await FileSystem.writeAsStringAsync(newFilename, base64Data, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
 
-            const fileInfo = await FileSystem.getInfoAsync(newFilename);
-            if (!fileInfo.exists || fileInfo.size === 0) {
-              throw new Error(`Failed to write file: ${newFilename}`);
-            }
-
-            pages[index] = { uri: `file://${newFilename}` };
-            return true;
-          } catch (error) {
-            console.error(`Failed to extract image ${index}:`, error.message);
-            return false;
+          const fileInfo = await FileSystem.getInfoAsync(newFilename);
+          if (fileInfo.exists && fileInfo.size > 0) {
+            extractedPages.push({ uri: `file://${newFilename}` });
+            console.log(
+              `Successfully extracted image ${i + 1}/${entries.length}`
+            );
+          } else {
+            console.warn(`Failed to extract image ${i + 1}/${entries.length}`);
           }
-        });
-
-        await Promise.all(batchPromises);
+        } catch (error) {
+          console.error(
+            `Error extracting image ${i + 1}/${entries.length}:`,
+            error
+          );
+          // Continue with next image instead of failing completely
+          continue;
+        }
       }
 
-      const validPages = pages.filter((page) => page.uri !== "");
-      return validPages;
+      return extractedPages;
     } catch (error) {
       console.error("Image extraction failed:", error);
       throw new Error(`Image extraction failed: ${error.message}`);

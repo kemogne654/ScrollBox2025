@@ -44,6 +44,7 @@ LogBox.ignoreLogs([
 SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
+const NAVIGATION_STATE_KEY = "navigationState";
 
 const AppNavigator = () => (
   <Stack.Navigator
@@ -54,23 +55,6 @@ const AppNavigator = () => (
       gestureDirection: "horizontal",
       animation: Platform.OS === "android" ? "none" : "slide_from_right",
       animationEnabled: Platform.OS === "ios",
-      screenListeners: {
-        beforeRemove: (e) => {
-          e.preventDefault();
-          Alert.alert(
-            "Go Back",
-            "Are you sure you want to go back?",
-            [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Yes",
-                onPress: () => e.data.action,
-              },
-            ],
-            { cancelable: false }
-          );
-        },
-      },
     }}
   >
     <Stack.Screen
@@ -118,8 +102,6 @@ function RootLayout() {
   const [appState, setAppState] = useState(AppState.currentState);
 
   // Handle app state changes
-  // Inside RootLayout.js, update the app state handler:
-
   useEffect(() => {
     const subscription = AppState.addEventListener(
       "change",
@@ -136,7 +118,7 @@ function RootLayout() {
               state.currentRoute === "OTPVerificationPage" ||
               state.currentRoute === "ChapterReader"
             ) {
-              // ✅ If user was reading a chapter, DO NOT reset navigation
+              // If user was reading a chapter, DO NOT reset navigation
               return;
             }
           }
@@ -155,35 +137,89 @@ function RootLayout() {
     };
   }, [appState]);
 
+  // Save navigation state when app goes to background
+  useEffect(() => {
+    const saveNavigationState = async () => {
+      const currentRoute = navigationRef.current?.getCurrentRoute()?.name;
+      if (currentRoute) {
+        await AsyncStorage.setItem(
+          NAVIGATION_STATE_KEY,
+          JSON.stringify({ currentRoute })
+        );
+      }
+    };
+
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState.match(/inactive|background/)) {
+        saveNavigationState();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   // Handle back button
   useEffect(() => {
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
         if (navigationRef.current?.canGoBack()) {
-          Alert.alert(
-            "Go Back",
-            "Are you sure you want to go back?",
-            [
-              { text: "Cancel", style: "cancel", onPress: () => {} },
-              {
-                text: "Yes",
-                onPress: () => navigationRef.current?.goBack(),
-              },
-            ],
-            { cancelable: false }
-          );
+          // If we can go back in the navigation stack
+          const currentRoute = navigationRef.current?.getCurrentRoute()?.name;
+
+          // List of screens where we want to show confirmation
+          const confirmationScreens = ["ChapterReader", "ChapterScreen"];
+
+          if (confirmationScreens.includes(currentRoute)) {
+            // Show confirmation dialog for specific screens
+            Alert.alert(
+              "Go Back",
+              "Are you sure you want to go back?",
+              [
+                { text: "Cancel", style: "cancel", onPress: () => {} },
+                {
+                  text: "Yes",
+                  onPress: () => navigationRef.current?.goBack(),
+                },
+              ],
+              { cancelable: false }
+            );
+          } else {
+            // For other screens, just go back without confirmation
+            navigationRef.current?.goBack();
+          }
           return true;
         } else {
-          Alert.alert(
-            "Exit App",
-            "Are you sure you want to exit?",
-            [
-              { text: "Cancel", style: "cancel", onPress: () => {} },
-              { text: "Exit", onPress: () => BackHandler.exitApp() },
-            ],
-            { cancelable: false }
-          );
+          // If we're at the root of the stack
+          if (navigationRef.current?.getCurrentRoute()?.name !== "Home") {
+            // If not on Home screen, navigate to Home instead of exiting
+            navigationRef.current?.reset({
+              index: 0,
+              routes: [{ name: "Home" }],
+            });
+            return true;
+          } else {
+            // Only show exit confirmation if we're on the Home screen
+            Alert.alert(
+              "Exit App",
+              "Are you sure you want to exit?",
+              [
+                { text: "Cancel", style: "cancel", onPress: () => {} },
+                {
+                  text: "Minimize",
+                  onPress: () => {
+                    // Minimize app instead of exiting
+                    if (Platform.OS === "android") {
+                      BackHandler.exitApp();
+                    }
+                  },
+                },
+              ],
+              { cancelable: false }
+            );
+          }
           return true;
         }
       }
@@ -192,6 +228,7 @@ function RootLayout() {
     return () => backHandler.remove();
   }, []);
 
+  // Initialize app
   useEffect(() => {
     const prepareApp = async () => {
       try {
@@ -211,6 +248,7 @@ function RootLayout() {
     prepareApp();
   }, []);
 
+  // Handle network connectivity
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsConnected(state.isConnected);

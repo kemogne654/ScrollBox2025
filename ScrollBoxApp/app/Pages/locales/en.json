@@ -14,6 +14,18 @@
     "gallery": "Gallery",
     "dico": "Dico"
   },
+  "loading": {
+    "preparingExperience": "Preparing your reading experience...",
+    "almostReady": "Your chapter is almost ready...",
+    "makingAdjustments": "Making final adjustments...",
+    "gettingReady": "Getting your chapter ready...",
+    "almostThere": "Almost there..."
+  },
+  "errors": {
+    "authRequired": "Authentication required",
+    "unableToPrepareLong": "Unable to prepare chapter",
+    "loadFailed": "Chapter load failed:"
+  },
   "common": {
     "close": "Close",
     "submit": "Submit",
