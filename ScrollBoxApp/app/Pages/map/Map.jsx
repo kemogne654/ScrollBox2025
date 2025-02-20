@@ -100,14 +100,43 @@ const Map = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [backgroundSound, setBackgroundSound] = useState();
   const navigation = useNavigation();
+  const [isAudioReady, setIsAudioReady] = useState(false);
 
+  // Preload and start audio immediately upon component mount
   useEffect(() => {
+    let isMounted = true;
+
+    const preloadAudio = async () => {
+      try {
+        // Pre-load the audio file
+        const soundObject = new Audio.Sound();
+        await soundObject.loadAsync(
+          require("./../../../assets/videos/CAPSULE map.mp3"),
+          { isLooping: true }
+        );
+
+        // Set volume and start playing immediately
+        await soundObject.setVolumeAsync(1.0);
+        await soundObject.playAsync();
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setBackgroundSound(soundObject);
+          setIsAudioReady(true);
+        }
+      } catch (error) {
+        console.warn("Audio preload error:", error);
+      }
+    };
+
+    // Setup screen orientation and audio
     const setupScreen = async () => {
       try {
         await ScreenOrientation.lockAsync(
           ScreenOrientation.OrientationLock.LANDSCAPE
         );
-        await loadSound();
+        // Start preloading audio right away
+        preloadAudio();
       } catch (error) {
         console.warn("Screen setup error:", error);
       }
@@ -115,37 +144,15 @@ const Map = () => {
 
     setupScreen();
 
+    // Cleanup function
     return () => {
+      isMounted = false;
       ScreenOrientation.unlockAsync();
       if (backgroundSound) {
         backgroundSound.unloadAsync();
       }
     };
   }, []);
-
-  const loadSound = async () => {
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require("./../../../assets/scrollboxImg/icons8-mute-50.png"),
-        { isLooping: true, volume: 1.0 }
-      );
-      setBackgroundSound(sound);
-      await sound.playAsync();
-    } catch (error) {
-      console.warn("Sound loading error:", error);
-    }
-  };
-
-  const toggleMute = async () => {
-    if (backgroundSound) {
-      try {
-        await backgroundSound.setIsMutedAsync(!isMuted);
-        setIsMuted(!isMuted);
-      } catch (error) {
-        console.warn("Mute toggle error:", error);
-      }
-    }
-  };
 
   useEffect(() => {
     Animated.timing(videoAnim, {
@@ -154,6 +161,21 @@ const Map = () => {
       useNativeDriver: true,
     }).start();
   }, [currentIndex]);
+
+  const toggleMute = async () => {
+    if (backgroundSound) {
+      try {
+        if (isMuted) {
+          await backgroundSound.setVolumeAsync(1.0);
+        } else {
+          await backgroundSound.setVolumeAsync(0);
+        }
+        setIsMuted(!isMuted);
+      } catch (error) {
+        console.warn("Mute toggle error:", error);
+      }
+    }
+  };
 
   const videos = videosByLanguage[i18n.language] || videosByLanguage.en;
 
@@ -171,7 +193,18 @@ const Map = () => {
     );
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    // Stop the background sound when closing
+    if (backgroundSound) {
+      try {
+        await backgroundSound.stopAsync();
+        await backgroundSound.unloadAsync();
+      } catch (error) {
+        console.warn("Error stopping background sound:", error);
+      }
+    }
+
+    // Navigate back
     navigation.goBack();
   };
 
@@ -310,6 +343,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-
 
 export default Map;

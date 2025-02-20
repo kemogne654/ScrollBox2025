@@ -1,64 +1,160 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
-  Image,
-  ScrollView,
   Dimensions,
+  FlatList,
+  Platform,
+  Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Loader from "../../../components/Loader";
 
 const { width, height } = Dimensions.get("window");
+
+// Enhanced image component with better error handling
+const EnhancedImage = ({ source, style, resizeMode }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError || Platform.OS === "web") {
+    return (
+      <Image
+        source={typeof source === "number" ? source : { uri: source.uri }}
+        style={style}
+        resizeMode={resizeMode}
+        onError={(e) =>
+          console.warn("Image loading failed:", e.nativeEvent.error)
+        }
+      />
+    );
+  }
+
+  // Dynamically import FastImage to prevent initial load errors
+  try {
+    const FastImage = require("react-native-fast-image").default;
+    return (
+      <FastImage
+        source={source}
+        style={style}
+        resizeMode={
+          FastImage.resizeMode[resizeMode] || FastImage.resizeMode.cover
+        }
+        onError={() => {
+          console.warn("FastImage failed, falling back to regular Image");
+          setHasError(true);
+        }}
+      />
+    );
+  } catch (error) {
+    console.warn("FastImage import failed:", error);
+    return (
+      <Image
+        source={typeof source === "number" ? source : { uri: source.uri }}
+        style={style}
+        resizeMode={resizeMode}
+        onError={(e) =>
+          console.warn("Image loading failed:", e.nativeEvent.error)
+        }
+      />
+    );
+  }
+};
 
 const GalleryPage = () => {
   const [showFullText, setShowFullText] = useState({});
   const [galleryData, setGalleryData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [error, setError] = useState(null);
+  const selectedImageRef = useRef(null);
   const navigation = useNavigation();
 
-  // Fetch gallery data
   useEffect(() => {
     const fetchGalleryData = async () => {
       try {
         const response = await fetch(
           "https://q1x8l0qpnb.execute-api.eu-west-3.amazonaws.com/production/api/galleries"
         );
+        if (!response.ok) throw new Error("Failed to fetch gallery data");
         const data = await response.json();
         setGalleryData(data);
       } catch (error) {
         console.error("Error fetching gallery data:", error);
+        setError(error.message);
       } finally {
         setLoading(false);
       }
     };
-
     fetchGalleryData();
   }, []);
 
-  const handleMoreText = (id) => {
+  const handleMoreText = useCallback((id) => {
     setShowFullText((prev) => ({
       ...prev,
       [id]: !prev[id],
     }));
-  };
+  }, []);
 
   const formatDate = (timestamp) => {
-    return new Date(timestamp).toLocaleDateString();
+    const date = new Date(timestamp);
+    return date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   };
 
   if (loading) {
     return <Loader visible={loading} />;
   }
 
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Error: {error}</Text>
+      </View>
+    );
+  }
+
+  const renderItem = ({ item }) => (
+    <View style={styles.card}>
+      <TouchableOpacity
+        onPress={() => (selectedImageRef.current = item.mediaContentUrl)}
+      >
+        <EnhancedImage
+          source={{ uri: item.mediaContentUrl }}
+          style={styles.cardImage}
+          resizeMode="cover"
+        />
+      </TouchableOpacity>
+      <View style={styles.cardContent}>
+        <View style={styles.textContainer}>
+          <Text
+            style={styles.overlayText}
+            numberOfLines={showFullText[item._id] ? undefined : 3}
+          >
+            {item.textContent}
+          </Text>
+          {item.textContent.length > 100 && (
+            <TouchableOpacity
+              style={styles.moreButton}
+              onPress={() => handleMoreText(item._id)}
+            >
+              <Text style={styles.moreText}>
+                {showFullText[item._id] ? "SHOW LESS" : "SHOW MORE"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <Text style={styles.dateText}>{formatDate(item.timestamp)}</Text>
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Navigation Bar */}
       <View style={styles.navBar}>
         <View style={styles.navTextContainer}>
           <Text style={styles.navTextTop}>Kijins</Text>
@@ -76,52 +172,23 @@ const GalleryPage = () => {
           <Image
             source={require("./../../../assets/scrollboxImg/09.png")}
             style={styles.closeIcon}
+            resizeMode="contain"
           />
         </TouchableOpacity>
       </View>
 
-      {/* Content Section */}
-      <View style={styles.content}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={styles.cardsContainer}>
-            {galleryData.map((item, index) => (
-              <View key={item._id} style={styles.card}>
-                <View style={styles.imageContainer}>
-                  <TouchableOpacity
-                    onPress={() => setSelectedImage(item.mediaContentUrl)}
-                  >
-                    <Image
-                      source={{ uri: item.mediaContentUrl }}
-                      style={styles.cardImage}
-                    />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.cardDescription}>
-                  <ScrollView style={styles.overlayTextContainer}>
-                    <Text style={styles.overlayText}>
-                      {showFullText[item._id]
-                        ? item.textContent
-                        : item.textContent.length > 100
-                        ? `${item.textContent.substring(0, 100)}...`
-                        : item.textContent}
-                    </Text>
-                  </ScrollView>
-                  {item.textContent.length > 100 && (
-                    <TouchableOpacity onPress={() => handleMoreText(item._id)}>
-                      <Text style={styles.moreText}>
-                        {showFullText[item._id] ? "LESS" : "MORE"}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  <Text style={styles.dateTextSmall}>
-                    {formatDate(item.timestamp)}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
+      <FlatList
+        data={galleryData}
+        keyExtractor={(item) => item._id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.scrollContainer}
+        removeClippedSubviews={true}
+        initialNumToRender={5}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        updateCellsBatchingPeriod={50}
+        onEndReachedThreshold={0.5}
+      />
     </SafeAreaView>
   );
 };
@@ -131,100 +198,103 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#121212",
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#121212",
+  },
+  errorText: {
+    color: "red",
+    fontSize: 16,
+    fontWeight: "500",
+  },
   navBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "black",
-    opacity: 0.9,
-    paddingTop: "8%",
-    paddingBottom: 10,
-    zIndex: 3,
+    paddingTop: Platform.OS === "ios" ? "5%" : "2%",
+    paddingBottom: "7%",
   },
   navTextContainer: {
-    justifyContent: "center",
-    alignItems: "flex-start",
     marginLeft: 20,
-    marginBottom: 18,
   },
   navTextTop: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
     color: "#EF7F1A",
-    marginBottom: -10,
   },
   navTextBottom: {
-    fontSize: 30,
+    fontSize: 28,
     color: "white",
     fontWeight: "bold",
   },
   closeIcon: {
-    width: 30,
-    height: 30,
+    width: width * 0.08,
+    height: width * 0.08,
     marginRight: 25,
-    marginBottom: 20,
-  },
-  content: {
-    flex: 1,
-    marginTop: 10,
   },
   scrollContainer: {
-    flexGrow: 1,
     padding: 20,
-    backgroundColor: "transparent",
-  },
-  cardsContainer: {
-    flexDirection: "column",
-    alignItems: "center",
+    paddingBottom: Platform.OS === "ios" ? 100 : 80,
   },
   card: {
     width: "100%",
     marginBottom: 15,
     borderRadius: 15,
+    backgroundColor: "rgba(43, 20, 9, 0.8)",
+    borderWidth: 1.5,
     borderColor: "gray",
-    borderWidth: 1,
     overflow: "hidden",
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-  },
-  imageContainer: {
-    width: "100%",
-    padding: 10,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   cardImage: {
     width: "100%",
     height: 380,
-    resizeMode: "cover",
-    borderRadius: 10,
+    borderTopLeftRadius: 15,
+    borderTopRightRadius: 15,
   },
-  cardDescription: {
-    width: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    padding: 5,
-    position: "relative",
-    minHeight: 60,
+  cardContent: {
+    padding: 15,
   },
-  overlayTextContainer: {
-    maxHeight: 100,
+  textContainer: {
+    marginBottom: 10,
   },
   overlayText: {
     color: "white",
-    fontSize: 12,
-    textAlign: "center",
-    padding: 5,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  moreButton: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+    backgroundColor: "rgba(239, 127, 26, 0.1)",
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#EF7F1A",
   },
   moreText: {
     color: "#EF7F1A",
-    textAlign: "center",
     fontWeight: "bold",
-    marginTop: 10,
-    fontSize: 16,
+    fontSize: 12,
+    textTransform: "uppercase",
   },
-  dateTextSmall: {
+  dateText: {
     color: "gray",
-    fontSize: 9,
-    position: "absolute",
-    right: 10,
-    bottom: 5,
+    fontSize: 12,
+    textAlign: "right",
+    marginTop: 5,
+    fontStyle: "italic",
   },
 });
 
