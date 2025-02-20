@@ -6,11 +6,13 @@ import {
   Image,
   Text,
   Animated,
+  BackHandler,
 } from "react-native";
 import { Video } from "expo-av";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { StatusBar } from "expo-status-bar";
 import { useTranslation } from "react-i18next";
+import { useFocusEffect } from "@react-navigation/native";
 import Loader from "../../../components/Loader";
 
 const SecondHomePage = ({ navigation }) => {
@@ -32,6 +34,23 @@ const SecondHomePage = ({ navigation }) => {
     }
   };
 
+  // Handle back button press
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        handleClose();
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+
+      return () => subscription.remove();
+    }, [])
+  );
+
   useEffect(() => {
     const lockOrientation = async () => {
       await ScreenOrientation.lockAsync(
@@ -42,13 +61,16 @@ const SecondHomePage = ({ navigation }) => {
     lockOrientation();
 
     return () => {
-      const unlockOrientation = async () => {
-        // Set orientation back to portrait when component unmounts
+      const cleanup = async () => {
+        // Stop video and reset orientation when component unmounts
+        if (videoRef.current) {
+          await videoRef.current.stopAsync();
+        }
         await ScreenOrientation.lockAsync(
           ScreenOrientation.OrientationLock.PORTRAIT
         );
       };
-      unlockOrientation();
+      cleanup();
     };
   }, []);
 
@@ -65,31 +87,60 @@ const SecondHomePage = ({ navigation }) => {
     }
   }, [i18n.language]);
 
-  const stopVideoAndNavigate = async (destination) => {
+  const handleClose = async () => {
+    // Stop video and reset orientation
     if (videoRef.current) {
-      await videoRef.current.stopAsync();
-    }
-
-    // Set orientation back to portrait before navigating
-    await ScreenOrientation.lockAsync(
-      ScreenOrientation.OrientationLock.PORTRAIT
-    );
-
-    if (destination === "back") {
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      } else {
-        navigation.navigate("Home");
+      try {
+        await videoRef.current.stopAsync();
+        await videoRef.current.unloadAsync();
+      } catch (error) {
+        console.log("Error stopping video:", error);
       }
+    }
+
+    try {
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.PORTRAIT
+      );
+    } catch (error) {
+      console.log("Error changing orientation:", error);
+    }
+
+    // Use exactly the navigation pattern specified
+    if (navigation.canGoBack()) {
+      navigation.goBack();
     } else {
-      navigation.navigate(destination);
+      navigation.navigate("Home");
     }
   };
 
-  const handleReadChapters = () => {
-    stopVideoAndNavigate("ChapterScreen");
-  };
+  const handleReadChapters = async () => {
+    // Stop video and reset orientation
+    if (videoRef.current) {
+      try {
+        await videoRef.current.stopAsync();
+        await videoRef.current.unloadAsync();
+      } catch (error) {
+        console.log("Error stopping video:", error);
+      }
+    }
 
+    try {
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.PORTRAIT
+      );
+    } catch (error) {
+      console.log("Error changing orientation:", error);
+    }
+
+    // Use the same navigation pattern as handleClose but navigate to ChapterScreen
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      navigation.navigate("ChapterScreen");
+    } else {
+      navigation.navigate("ChapterScreen");
+    }
+  };
   const handlePlaybackUpdate = (status) => {
     // Hide loader when video starts playing
     if (status.isLoaded && status.isPlaying && loading) {
@@ -116,8 +167,30 @@ const SecondHomePage = ({ navigation }) => {
 
     // Navigate to Home when video finishes
     if (status.didJustFinish) {
-      stopVideoAndNavigate("Home");
+      handleVideoFinish();
     }
+  };
+
+  const handleVideoFinish = async () => {
+    // Stop video and reset orientation
+    if (videoRef.current) {
+      try {
+        await videoRef.current.stopAsync();
+        await videoRef.current.unloadAsync();
+      } catch (error) {
+        console.log("Error stopping video:", error);
+      }
+    }
+
+    try {
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.PORTRAIT
+      );
+    } catch (error) {
+      console.log("Error changing orientation:", error);
+    }
+
+    navigation.navigate("Home");
   };
 
   return (
@@ -139,10 +212,7 @@ const SecondHomePage = ({ navigation }) => {
         }}
       />
 
-      <TouchableOpacity
-        style={styles.closeButton}
-        onPress={() => stopVideoAndNavigate("back")}
-      >
+      <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
         <Image
           source={require("./../../../assets/scrollboxImg/09.png")}
           style={styles.closeIcon}
