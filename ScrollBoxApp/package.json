@@ -15,6 +15,7 @@
     "preset": "jest-expo"
   },
   "dependencies": {
+    "@babel/runtime": "^7.26.9",
     "@expo/server": "^0.5.0",
     "@expo/vector-icons": "^14.0.4",
     "@lottiefiles/dotlottie-react": "^0.6.5",
