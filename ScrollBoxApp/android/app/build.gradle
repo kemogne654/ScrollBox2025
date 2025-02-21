@@ -86,7 +86,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.scrolbox"
+    namespace 'com.guy654.ScrollBoxApp'
     defaultConfig {
         applicationId 'com.guy654.ScrollBoxApp'
         minSdkVersion rootProject.ext.minSdkVersion
