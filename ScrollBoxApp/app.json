@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "ScrollBox",
+    "name": "ScrolBox",
     "slug": "ScrollBoxApp",
     "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon12.png",
     "scheme": "myapp",
@@ -18,10 +19,7 @@
         "NSPhotoLibraryUsageDescription": "This app requires access to your photo library for downloading and saving files.",
         "NSDocumentsFolderUsageDescription": "This app requires access to your documents folder to save and manage files."
       },
-      "associatedDomains": [
-        "applinks:staging.dcamwrny8wtxs.amplifyapp.com",
-        "applinks:staging.dcamwrny8wtxs.amplifyapp.com"
-      ]
+      "associatedDomains": ["applinks:staging.dcamwrny8wtxs.amplifyapp.com"]
     },
     "android": {
       "adaptiveIcon": {
@@ -32,14 +30,6 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "ACCESS_MEDIA_LOCATION",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.INTERNET",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "ACCESS_MEDIA_LOCATION",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.INTERNET"
       ],
       "package": "com.guy654.ScrollBoxApp",
@@ -51,52 +41,13 @@
               "scheme": "https",
               "host": "staging.dcamwrny8wtxs.amplifyapp.com",
               "pathPrefix": "/reset-password"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
-        {
-          "action": "VIEW",
-          "data": [
+            },
             {
               "scheme": "myapp",
               "host": "reset-password"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
-        {
-          "action": "VIEW",
-          "data": [
-            {
-              "scheme": "https",
-              "host": "staging.dcamwrny8wtxs.amplifyapp.com",
-              "pathPrefix": "/reset-password"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
-        {
-          "action": "VIEW",
-          "data": [
-            {
-              "scheme": "myapp",
-              "host": "reset-password"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
@@ -135,9 +86,6 @@
       }
     },
     "owner": "guy654",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
     "updates": {
       "url": "https://u.expo.dev/77273bcd-c09d-4a17-b4b4-6603c6a60992"
     }

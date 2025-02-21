@@ -7,7 +7,11 @@
   "build": {
     "production": {
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "env": {
+          "EAS_BUILD_GRADLE_KOTLIN_VERSION": "1.9.25",
+          "EAS_BUILD_GRADLE_VERSION": "8.0.2"
+        }
       }
     }
   }

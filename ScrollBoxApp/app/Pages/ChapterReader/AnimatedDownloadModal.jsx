@@ -1,9 +1,19 @@
 import React from "react";
-import { View, Text, StyleSheet, Animated, Dimensions } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Dimensions,
+  TouchableOpacity,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
 
 const { width, height } = Dimensions.get("window");
 
 const AdvancedDownloadModal = ({ progress, stage }) => {
+  const navigation = useNavigation(); // Navigation hook
+
   const fractals = React.useRef(
     [...Array(50)].map(() => ({
       x: Math.random() * width,
@@ -38,6 +48,21 @@ const AdvancedDownloadModal = ({ progress, stage }) => {
 
   return (
     <View style={styles.container}>
+      {/* Close Button with Navigation */}
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate("Home");
+          }
+        }}
+      >
+        <Text style={styles.closeButtonText}>×</Text>
+      </TouchableOpacity>
+
+      {/* Floating Animated Fractals */}
       {fractals.map((fractal, index) => (
         <Animated.View
           key={index}
@@ -66,6 +91,7 @@ const AdvancedDownloadModal = ({ progress, stage }) => {
         />
       ))}
 
+      {/* Downloading Content */}
       <View style={styles.content}>
         <Animated.Text style={styles.stageText}>{stage}</Animated.Text>
 
@@ -86,14 +112,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#030308",
     overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
   },
   fractal: {
     position: "absolute",
     width: 10,
     height: 10,
-    backgroundColor: "rgba(239, 127, 26, 0.3)", // Changed to match #EF7F1A
+    backgroundColor: "rgba(239, 127, 26, 0.3)", // Matched with EF7F1A
     borderRadius: 5,
-    shadowColor: "#EF7F1A", // Updated shadow color
+    shadowColor: "#EF7F1A",
     shadowOffset: { width: 0, height: 0 },
     shadowRadius: 10,
     shadowOpacity: 0.7,
@@ -106,7 +134,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   stageText: {
-    color: "#EF7F1A", // Changed to match the app's primary color
+    color: "#EF7F1A",
     fontSize: 22,
     marginBottom: 20,
     letterSpacing: 2,
@@ -127,6 +155,24 @@ const styles = StyleSheet.create({
     color: "#EF7F1A",
     fontSize: 24,
     marginTop: 15,
+    fontWeight: "bold",
+  },
+  // Close Button Style
+  closeButton: {
+    position: "absolute",
+    top: 30,
+    right: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  closeButtonText: {
+    color: "#EF7F1A",
+    fontSize: 24,
     fontWeight: "bold",
   },
 });

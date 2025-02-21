@@ -1,4 +1,5 @@
 {
+  "readChapters": "Lire les chapitres",
   "homepage": {
     "to_start": "Pour",
     "the_kijins": "Commencer",
@@ -12,6 +13,18 @@
     "map": "Carte",
     "gallery": "Galerie",
     "dico": "Dico"
+  },
+  "loading": {
+    "preparingExperience": "Préparation de votre expérience de lecture...",
+    "almostReady": "Votre chapitre est presque prêt...",
+    "makingAdjustments": "Finalisation des ajustements...",
+    "gettingReady": "Préparation de votre chapitre...",
+    "almostThere": "Presque terminé..."
+  },
+  "errors": {
+    "authRequired": "Authentification requise",
+    "unableToPrepareLong": "Impossible de préparer le chapitre",
+    "loadFailed": "Échec du chargement du chapitre:"
   },
   "forgot_password": {
     "title": "Mot de passe oublié",
@@ -56,6 +69,11 @@
   "cart": {
     "title": "Votre Panier",
     "empty": "Votre panier est vide.",
+    "your_cart": "Votre Panier",
+    "payment_method": "Méthode de paiement",
+    "total": "Total",
+    "processing": "Traitement en cours...",
+    "proceed_to_checkout": "Passer à la caisse",
     "add_to_basket_failed": "Impossible d'ajouter le chapitre au panier. Veuillez réessayer.",
     "add_to_basket_error": "Erreur. Impossible d'ajouter le chapitre au panier.",
     "login_required_proceed": "Erreur. Vous devez être connecté pour continuer.",
@@ -81,6 +99,18 @@
     "login_required": "Veuillez vous connecter pour ajouter des articles à votre panier",
     "error_message": "Une erreur s'est produite lors de l'ajout au panier. Veuillez réessayer."
   },
+  "chapter": {
+    "tome": "Tome",
+    "default_tome": "Tome 1",
+    "read": "Lire",
+    "buy": "Acheter",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "purchase": "Acheter"
+  },
+  "general": {
+    "close": "Fermer"
+  },
   "network_error": {
     "title": "Erreur Réseau",
     "default_message": "Un problème est survenu. Veuillez vérifier votre connexion internet.",
@@ -102,7 +132,7 @@
     "password_required": "Veuillez saisir votre mot de passe.",
     "login_error": "Échec de la connexion. Veuillez réessayer.",
     "credentials_error": "E-mail ou mot de passe invalide.",
-    "logging_in": "Connexion en cours...",
+    "logging_in": "Connexion...",
     "password_show": "Afficher",
     "password_hide": "Masquer",
     "google_signin": "Connectez-vous avec Google",
