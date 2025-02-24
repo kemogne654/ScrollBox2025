@@ -1,11 +1,13 @@
-import React from "react";
-import { View, Text, TouchableOpacity, Modal, Dimensions } from "react-native";
+import React, { useEffect } from "react";
 import {
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  WifiOff,
-} from "lucide-react-native";
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  Dimensions,
+  BackHandler,
+  Image,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 
 const { width, height } = Dimensions.get("window");
@@ -13,26 +15,62 @@ const { width, height } = Dimensions.get("window");
 const MessageModal = ({ visible, message, type, onClose }) => {
   const { t } = useTranslation();
 
+  // Handle Android back button to prevent app exit when modal is visible
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (visible) {
+          onClose();
+          return true; // Consume the event
+        }
+        return false;
+      }
+    );
+    return () => backHandler.remove();
+  }, [visible, onClose]);
+
+  // Modal style configurations for different states using images
   const modalStyles = {
     success: {
       backgroundColor: "#2B1409",
       iconColor: "#2ECC71",
-      icon: <CheckCircle2 size={80} color="#2ECC71" />,
+      icon: (
+        <Image
+          source={require("../../../assets/scrollboxImg/success.png")}
+          style={styles.iconImage}
+        />
+      ),
     },
     error: {
       backgroundColor: "#2B1409",
       iconColor: "#E74C3C",
-      icon: <XCircle size={80} color="#E74C3C" />,
+      icon: (
+        <Image
+          source={require("../../../assets/scrollboxImg/failed.png")}
+          style={styles.iconImage}
+        />
+      ),
     },
     warning: {
       backgroundColor: "#2B1409",
       iconColor: "#F39C12",
-      icon: <AlertTriangle size={80} color="#F39C12" />,
+      icon: (
+        <Image
+          source={require("../../../assets/scrollboxImg/failed.png")}
+          style={styles.iconImage}
+        />
+      ),
     },
     offline: {
       backgroundColor: "#2B1409",
       iconColor: "#95A5A6",
-      icon: <WifiOff size={80} color="#95A5A6" />,
+      icon: (
+        <Image
+          source={require("../../../assets/scrollboxImg/failed.png")}
+          style={styles.iconImage}
+        />
+      ),
     },
   };
 
@@ -45,6 +83,7 @@ const MessageModal = ({ visible, message, type, onClose }) => {
       transparent={true}
       visible={visible}
       onRequestClose={onClose}
+      statusBarTranslucent={true}
     >
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContainer, { backgroundColor }]}>
@@ -74,9 +113,10 @@ const styles = {
     alignItems: "center",
     backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
+  // Fixed modal size
   modalContainer: {
     width: width * 0.9,
-    height: height * 0.4,
+    height: height * 0.45,
     borderRadius: 20,
     overflow: "hidden",
   },
@@ -90,21 +130,24 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
+    paddingVertical: 15,
   },
   iconContainer: {
-    position: "absolute",
-    top: 10,
-    alignSelf: "center",
+    marginBottom: 0,
     backgroundColor: "white",
     borderRadius: 50,
     padding: 10,
+  },
+  iconImage: {
+    width: 80,
+    height: 80,
+    resizeMode: "contain",
   },
   messageText: {
     fontSize: 18,
     color: "#333",
     textAlign: "center",
     marginBottom: 30,
-    marginTop: 80,
   },
   closeButton: {
     paddingVertical: 12,
